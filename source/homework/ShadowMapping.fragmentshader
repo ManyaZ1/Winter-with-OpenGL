@@ -1,0 +1,219 @@
+#version 330 core
+
+in vec4 vertex_position_cameraspace;
+in vec4 vertex_normal_cameraspace;
+in vec4 light_position_cameraspace;
+in vec2 vertex_UV;
+in vec4 vertex_position_lightspace;
+in vec4 vertex_position_lightspace2;           
+in vec4 light_position_cameraspace2;
+uniform sampler2D shadowMapSampler;
+uniform sampler2D diffuseColorSampler;
+uniform sampler2D specularColorSampler;
+
+uniform sampler2D shadowMapSampler2;
+uniform vec3 lightPosition_worldspace2;
+uniform int useTexture = 0;
+
+
+// light properties
+struct Light {
+    vec4 La;
+    vec4 Ld;
+    vec4 Ls;
+    vec3 lightPosition_worldspace;
+};
+uniform Light light;
+uniform Light light2;
+// materials
+struct Material {
+    vec4 Ka; 
+    vec4 Kd;
+    vec4 Ks;
+    float Ns; 
+};
+uniform Material mtl;
+
+out vec4 fragmentColor;
+
+
+//void phong(float visibility);
+void phong( Light light, float visibility);
+float ShadowCalculation(vec4 fragPositionLightspace, sampler2D depthMap);
+vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility);
+
+/*
+void main() {   
+    
+    // Task 4.3
+    float shadow  = ShadowCalculation(vertex_position_lightspace, shadowMapSampler);
+
+    //shadow by 2nd light source
+    float shadow2 = ShadowCalculation(vertex_position_lightspace2,shadowMapSampler2);
+
+    float visibility = 1.0f - shadow;
+    float visibility2 = 1.0f - shadow2;
+    
+    phong(light2, visibility2);
+
+
+    FinalColor = ColorFromLight1 + ColorFromLight2;
+}*/
+void main() {   
+    
+    // --- LIGHT 1  ---
+    float shadow1 = ShadowCalculation(vertex_position_lightspace, shadowMapSampler);
+    float visibility1 = 1.0f - shadow1;
+    
+    vec3 color1 = calculatePhong(light, light_position_cameraspace, visibility1);
+
+
+    // --- LIGHT 2  ---
+    float shadow2 = ShadowCalculation(vertex_position_lightspace2, shadowMapSampler2);
+    float visibility2 = 1.0f - shadow2;
+
+    vec3 color2 = calculatePhong(light2, light_position_cameraspace2, visibility2);
+
+    // --- COMBINE ---
+    vec3 finalRGB = 0.5*color1 + 0.5*color2;
+    fragmentColor = vec4(finalRGB, 1.0);
+}
+
+
+
+float ShadowCalculation(vec4 fragPositionLightspace,sampler2D depthMap ) {
+    // Given the position of a fragment in lightspace coordinates
+    // We sample the depth buffer to see whether or not the fragment is shadowed
+    
+    float shadow;
+
+    // Task 4.3
+    
+    // Perspective devide to bring coordinates in range[-1, 1]
+    vec3 projCoords = fragPositionLightspace.xyz / fragPositionLightspace.w; 
+
+    // Since the depth map values are in range[0, 1]
+    projCoords = projCoords*0.5 + 0.5;
+
+    // Sampling the closest point in this position from the depth map
+    // REMINDER: Since we are in lightspace coordinates,
+    //           the z parameter is the depth from the camera
+    //float closestDepth = texture(shadowMapSampler, projCoords.xy).r;
+    float closestDepth = texture(depthMap , projCoords.xy).r;
+    // Then we get the depth of the current fragment
+    float currentDepth = projCoords.z; //kanonas deksiou xerioy ara z einai pros ta mesa
+
+    // If the current fragment is farther than the closest point, the fragment is shadowed
+    shadow = currentDepth > closestDepth  ? 1.0 : 0.0;
+    //
+    // Task 4.4
+    // Correcting the quantization problem
+    float bias = 0.005f;
+    shadow = currentDepth > (closestDepth+bias)  ? 1.0 : 0.0;
+        
+
+    // Task 4.6 Make the shadow edges more realistic
+    
+    shadow = 0.0;
+    //vec2 depthMap_dimensions = textureSize(shadowMapSampler, 0);
+    vec2 depthMap_dimensions = textureSize(depthMap, 0);
+
+    vec2 texelSize = 1.0 / depthMap_dimensions;
+    for(int x = -1; x <= 1; x++ ){
+        for(int y = -1; y <= 1; y++ ){
+            //float pcfDepth = texture(shadowMapSampler, projCoords.xy + vec2(x, y) * texelSize).r;
+            float pcfDepth = texture(depthMap, projCoords.xy + vec2(x, y) * texelSize).r;
+            shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
+        }
+    }
+    shadow /= 9.0;
+    
+
+
+    // Task 4.5
+    
+    if(projCoords.z > 1)
+        shadow = 0.0;
+
+    return shadow;
+
+}
+
+vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
+   
+    vec4 _Ks = mtl.Ks;
+    vec4 _Kd = mtl.Kd;
+    vec4 _Ka = mtl.Ka;
+    float _Ns = mtl.Ns;
+
+    if (useTexture == 1) {
+        _Ks = vec4(texture(specularColorSampler, vertex_UV).rgb, 1.0);
+        _Kd = vec4(texture(diffuseColorSampler, vertex_UV).rgb, 1.0);
+        _Ka = vec4(0.05 * _Kd.rgb, _Kd.a);
+        _Ns = 10;
+    }
+    
+    // 1. Ambient
+    vec4 Ia = lightData.La * _Ka;
+
+    // 2. Diffuse
+    vec4 N = normalize(vertex_normal_cameraspace); 
+    // CRITICAL CHANGE: Use the specific lightPosCamera passed as argument
+    vec4 L = normalize(lightPosCamera - vertex_position_cameraspace);
+    float cosTheta = clamp(dot(N, L), 0, 1);
+    vec4 Id = lightData.Ld * _Kd * cosTheta;
+
+    // 3. Specular
+    vec4 R = reflect(-L, N);
+    vec4 E = normalize(vec4(0, 0, 0, 1) - vertex_position_cameraspace);
+    float cosAlpha = clamp(dot(E, R), 0, 1);
+    float specular_factor = pow(cosAlpha, _Ns);
+    vec4 Is = lightData.Ls * _Ks * specular_factor;
+
+    // Apply visibility to Diffuse and Specular only (Ambient is usually constant)
+    // Note: Some prefer to apply shadows to Ambient too, but standard Phong usually doesn't.
+    vec4 combinedColor = Ia + (Id * visibility) + (Is * visibility);
+
+    return combinedColor.rgb;
+}
+void phong(Light light, float visibility) {
+   
+    vec4 _Ks = mtl.Ks;
+    vec4 _Kd = mtl.Kd;
+    vec4 _Ka = mtl.Ka;
+    float _Ns = mtl.Ns;
+
+    // use texture for materials
+    if (useTexture == 1) {
+        _Ks = vec4(texture(specularColorSampler, vertex_UV).rgb, 1.0);
+        _Kd = vec4(texture(diffuseColorSampler, vertex_UV).rgb, 1.0);
+        _Ka = vec4(0.05 * _Kd.rgb, _Kd.a);
+        _Ns = 10;
+    }
+    
+    // model ambient intensity (Ia)
+    vec4 Ia = light.La * _Ka;
+
+    // model diffuse intensity (Id)
+    vec4 N = normalize(vertex_normal_cameraspace); 
+    vec4 L = normalize(light_position_cameraspace - vertex_position_cameraspace);
+    float cosTheta = clamp(dot(N, L), 0, 1);
+    vec4 Id = light.Ld * _Kd * cosTheta;
+
+    // model specular intensity (Is)
+    vec4 R = reflect(-L, N);
+    vec4 E = normalize(vec4(0, 0, 0, 1) - vertex_position_cameraspace);
+    float cosAlpha = clamp(dot(E, R), 0, 1);
+    float specular_factor = pow(cosAlpha, _Ns);
+    vec4 Is = light.Ls * _Ks * specular_factor;
+
+    // here we would normally model the light attenuation effect
+    // but since this is a directional light source that is infinitely far away
+    // attenuating the light intensity does not make sense
+
+    // final fragment color
+    fragmentColor = vec4(
+        Ia + 
+        Id*visibility +   // Task 4.3 Use visibility
+        Is*visibility );
+}
