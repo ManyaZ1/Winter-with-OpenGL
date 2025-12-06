@@ -15,6 +15,9 @@ uniform sampler2D specularColorSampler;
 uniform sampler2D shadowMapSampler2;
 uniform vec3 lightPosition_worldspace2;
 uniform int useTexture = 0;
+ // 0: Simple Material (mtl struct) 
+// 1: Terrain/Lake Textures 
+// 2: Sun Sphere Texture (new)
 
 // terrain textures 
 uniform sampler2D terrainTex;   // Grass 1
@@ -24,7 +27,7 @@ uniform sampler2D waterTex2;    // Water 2 (animated)
 uniform sampler2D bottomTex;    // Optional lake bottom
 uniform sampler2D maskTex;      // White = lake
 uniform float time;             // for water animation
-
+uniform sampler2D sunTex;
 
 // light properties
 struct Light {
@@ -155,7 +158,17 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     vec4 _Kd = mtl.Kd;
     vec4 _Ka = mtl.Ka;
     float _Ns = mtl.Ns;
-
+    if (useTexture == 2) {
+        vec3 sunColor = texture(sunTex, 10* vertex_UV + vec2(time*0.05, time*0.05)).rgb;
+        _Kd.rgb = sunColor;
+        _Ka.rgb =  _Kd.rgb;
+        _Ks.rgb = _Kd.rgb; // or keep as is
+        _Ns = 50.0;
+        /*_Ks = vec4(texture(specularColorSampler, vertex_UV).rgb, 1.0);
+        _Kd = vec4(texture(diffuseColorSampler, vertex_UV).rgb, 1.0);
+        _Ka = vec4(0.05 * _Kd.rgb, _Kd.a);
+        _Ns = 10;*/
+    }
     if (useTexture == 1) {
     vec3 terrainColor = mix(
         texture(terrainTex, vertex_UV_tiled).rgb,

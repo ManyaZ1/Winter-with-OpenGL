@@ -30,7 +30,7 @@ void createContext();
 void mainLoop();
 void free();
 
-#define W_WIDTH  2000
+#define W_WIDTH  1800
 #define W_HEIGHT  940
 #define TITLE "Winter"
 
@@ -56,7 +56,7 @@ Light* light;
 Light* light2;
 GLuint shaderProgram, depthProgram, miniMapProgram;
 Drawable* model1;
-Drawable* model2;
+Drawable* sphere;
 Drawable* terrain;
 Drawable* plane;
 GLuint modelDiffuseTexture, modelSpecularTexture;
@@ -101,7 +101,7 @@ GLuint waterTexture ;
 GLuint waterTexture2 ;
 GLuint bottomTexture ;
 GLuint maskTexture;
-
+GLuint sunTexture;
 
 // locations for miniMapProgram
 GLuint quadTextureSamplerLocation;
@@ -130,6 +130,13 @@ const Material turquoise
 //       of an object.
 // 
 // Creating a function to upload (make uniform) the light parameters to the shader program
+void uploadLight(const Light& light) {
+	glUniform4f(LaLocation, light.La.r, light.La.g, light.La.b, light.La.a);
+	glUniform4f(LdLocation, light.Ld.r, light.Ld.g, light.Ld.b, light.Ld.a);
+	glUniform4f(LsLocation, light.Ls.r, light.Ls.g, light.Ls.b, light.Ls.a);
+	glUniform3f(lightPositionLocation, light.lightPosition_worldspace.x,
+		light.lightPosition_worldspace.y, light.lightPosition_worldspace.z);
+}
 void uploadLight(const Light& light, const Light& light2) {
 	glUniform4f(LaLocation, light.La.r, light.La.g, light.La.b, light.La.a);
 	glUniform4f(LdLocation, light.Ld.r, light.Ld.g, light.Ld.b, light.Ld.a);
@@ -270,47 +277,13 @@ void createContext() {
 	// modelSpecularTexture = loadSOIL("suzanne_specular.bmp");
 
 	// model2 (sphere) is used for light visualization, keep loading it
-	model2 = new Drawable("earth.obj");
+	sphere = new Drawable("earth.obj");
 
 	// Task 1.3
 	// Creating a Drawable object using vertices, uvs, normals
 	// In this task we will create a plane on which the shadows will be displayed
 
-	// plane vertices
-	float y = -1; // offset to move the plane up/down across the y axis
-	vector<vec3> floorVertices = {
-		vec3(-20.0f, y, -20.0f),
-		vec3(-20.0f, y, 20.0f),
-		vec3(20.0f,y, 20.0f),
-		vec3(20.0f,y, 20.0f),
-		vec3(20.0f,y, -20.0f),
-		vec3(-20.0f, y, -20.0f),
-
-	};
-
-	// plane normals
-	vector<vec3> floorNormals = {
-		vec3(0.0f, 1.0f, 0.0f),
-		vec3(0.0f, 1.0f, 0.0f),
-		vec3(0.0f, 1.0f, 0.0f),
-		vec3(0.0f, 1.0f, 0.0f),
-		vec3(0.0f, 1.0f, 0.0f),
-		vec3(0.0f, 1.0f, 0.0f)
-	};
-
-	// plane uvs
-	vector<vec2> floorUVs = {
-		vec2(0.0f, 0.0f),
-		vec2(0.0f, 1.0f),
-		vec2(1.0f, 1.0f),
-		vec2(1.0f, 1.0f),
-		vec2(1.0f, 0.0f),
-		vec2(0.0f, 0.0f),
-	};
-
-	// Call the Drawable constructor
-	// Notice, that this way we dont have to generate VAO and VBO for the matrices
-	plane = new Drawable(floorVertices, floorUVs, floorNormals);
+	
 
 	// Task 2.2: Creating a 2D quad to visualize the depthmap
 	// create geometry and vao for screen-space quad
@@ -361,6 +334,10 @@ void createContext() {
 	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	maskTexture = loadSOIL("assets/lake_mask.bmp");
 
+	sunTexture = loadSOIL("assets/fiery.bmp");
+	glBindTexture(GL_TEXTURE_2D, sunTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
 }
 
@@ -376,7 +353,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
 	glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
 
 	// Upload light(s)
-	uploadLight(*light, *light2); //??? giati 2 
+	uploadLight(*light); //??? giati 2 
 
 	// Use material, not textures
 	//uploadMaterial(turquoise);
@@ -426,6 +403,18 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
 	terrain->bind();
 	terrain->draw();
 
+	//light with the sunTexture
+	glUniform1i(useTextureLocation, 2);
+	glUniform1f(normDirLocation, -1.0f);
+	glActiveTexture(GL_TEXTURE6);
+	glBindTexture(GL_TEXTURE_2D, sunTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "sunTex"), 6);
+	// Model matrix for sun
+	mat4 sunModel = translate(mat4(), light->lightPosition_worldspace) * scale(mat4(), vec3(0.2f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &sunModel[0][0]);
+	sphere->bind();
+	sphere->draw();
+	/*light with simple matterial version
 	// Save previous material state if needed (we'll set simple material)
 	glUniform1i(useTextureLocation, 0);
 
@@ -450,7 +439,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
 		model2->bind(); // reuse the loaded sphere (earth.obj)
 		model2->draw();
 	}
-
+	*/
 	//// Light 2 sphere
 	//{
 	//	Material lm2{
