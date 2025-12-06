@@ -77,6 +77,7 @@ include_directories(
   external/Simple-OpenGL-Image-Library/include/
   external/tinyxml2/include/
   external/tinyobjloader/include/
+  thirdparty/stb
   .
   )
 

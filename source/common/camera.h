@@ -22,6 +22,7 @@ public:
 
     Camera(GLFWwindow* window);
     void update();
+	float getHeightAtXZ(float x, float z);
 };
 
 #endif

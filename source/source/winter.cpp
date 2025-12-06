@@ -21,6 +21,13 @@
 #include <common/light.h> 
 
 
+#include <vector>
+
+#define SCALING_FACTOR 60 //lab.cpp kai camera.cpp
+
+
+
+
 using namespace std;
 using namespace glm;
 
@@ -63,6 +70,7 @@ GLuint modelDiffuseTexture, modelSpecularTexture;
 GLuint depthFBO, depthTexture;
 GLuint depthFBO2, depthTexture2;
 
+// Global instance to hold your terrain data after loading
 
 Drawable* quad;
 
@@ -199,6 +207,7 @@ void createDepthFBOAndTexture(GLuint& fboID, GLuint& textureID) {
 	// Unbind the FBO before exiting the function
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
 
 void free() {
 	// Delete Shader Programs
@@ -381,7 +390,8 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
 
 	// Model matrix for terrain
 	// scale *50
-	float scaling_factor = 60.0f;
+
+	float scaling_factor = SCALING_FACTOR;
 	mat4 modelMatrix = translate(mat4(), vec3(0.0f, -1.0f, -5.0f)) 	* scale(mat4(), vec3(scaling_factor));
 
 	// choose repeats_on_surface = number of tiles you want to see on the terrain
@@ -653,6 +663,7 @@ void initialize() {
 int main(void) {
 	try {
 		initialize();
+		
 		createContext();
 		mainLoop();
 		free();

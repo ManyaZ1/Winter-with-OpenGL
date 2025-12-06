@@ -1,7 +1,9 @@
 #include <glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include "camera.h"
+#include <vector>
 
+#define SCALING_FACTOR 60 //lab.cpp kai camera.cpp
 using namespace glm;
 
 Camera::Camera(GLFWwindow* window) : window(window) {
