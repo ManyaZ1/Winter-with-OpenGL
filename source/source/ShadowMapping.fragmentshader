@@ -9,12 +9,11 @@ in vec4 vertex_position_lightspace2;
 in vec4 light_position_cameraspace2;
 in vec2 vertex_UV_tiled;
 uniform sampler2D shadowMapSampler;
-uniform sampler2D diffuseColorSampler;
-uniform sampler2D specularColorSampler;
+uniform sampler2D skyTex;
 
 uniform sampler2D shadowMapSampler2;
 uniform vec3 lightPosition_worldspace2;
-uniform int useTexture = 0;
+uniform int useTexture;
  // 0: Simple Material (mtl struct) 
 // 1: Terrain/Lake Textures 
 // 2: Sun Sphere Texture (new)
@@ -50,37 +49,25 @@ uniform Material mtl;
 out vec4 fragmentColor;
 
 
-//void phong(float visibility);
-void phong( Light light, float visibility);
+
 float ShadowCalculation(vec4 fragPositionLightspace, sampler2D depthMap);
 vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility);
 
-/*
+
 void main() {   
-    
-    // Task 4.3
-    float shadow  = ShadowCalculation(vertex_position_lightspace, shadowMapSampler);
-
-    //shadow by 2nd light source
-    float shadow2 = ShadowCalculation(vertex_position_lightspace2,shadowMapSampler2);
-
-    float visibility = 1.0f - shadow;
-    float visibility2 = 1.0f - shadow2;
-    
-    phong(light2, visibility2);
-
-
-    FinalColor = ColorFromLight1 + ColorFromLight2;
-}*/
-void main() {   
-    
+    if (useTexture == 3) {        
+        // 3. Output the final color and skip the rest of the light/shadow calculation
+        fragmentColor = vec4(texture(skyTex, vertex_UV).rgb, 1.0);
+       
+    }
+    else {
     // --- LIGHT 1  ---
     float shadow1 = ShadowCalculation(vertex_position_lightspace, shadowMapSampler);
     float visibility1 = 1.0f - shadow1;
     
     vec3 color1 = calculatePhong(light, light_position_cameraspace, visibility1);
     fragmentColor = vec4(color1, 1.0);
-
+    }
     // --- LIGHT 2  ---
 //    float shadow2 = ShadowCalculation(vertex_position_lightspace2, shadowMapSampler2);
 //    float visibility2 = 1.0f - shadow2;
@@ -158,6 +145,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     vec4 _Kd = mtl.Kd;
     vec4 _Ka = mtl.Ka;
     float _Ns = mtl.Ns;
+   
     if (useTexture == 2) {
         vec3 sunColor = texture(sunTex, 5 * vertex_UV + vec2(time*0.05, time*0.05)).rgb; //πολλαπλασιασμος των uv για να επαναληφθει πολλες φορες η υφή
         _Kd.rgb = sunColor;
@@ -216,44 +204,3 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     return combinedColor.rgb;
 }
 
-void phong(Light light, float visibility) {
-   
-    vec4 _Ks = mtl.Ks;
-    vec4 _Kd = mtl.Kd;
-    vec4 _Ka = mtl.Ka;
-    float _Ns = mtl.Ns;
-
-    // use texture for materials
-    if (useTexture == 1) {
-        _Ks = vec4(texture(specularColorSampler, vertex_UV).rgb, 1.0);
-        _Kd = vec4(texture(diffuseColorSampler, vertex_UV).rgb, 1.0);
-        _Ka = vec4(0.05 * _Kd.rgb, _Kd.a);
-        _Ns = 10;
-    }
-    
-    // model ambient intensity (Ia)
-    vec4 Ia = light.La * _Ka;
-
-    // model diffuse intensity (Id)
-    vec4 N = normalize(vertex_normal_cameraspace); 
-    vec4 L = normalize(light_position_cameraspace - vertex_position_cameraspace);
-    float cosTheta = clamp(dot(N, L), 0, 1);
-    vec4 Id = light.Ld * _Kd * cosTheta;
-
-    // model specular intensity (Is)
-    vec4 R = reflect(-L, N);
-    vec4 E = normalize(vec4(0, 0, 0, 1) - vertex_position_cameraspace);
-    float cosAlpha = clamp(dot(E, R), 0, 1);
-    float specular_factor = pow(cosAlpha, _Ns);
-    vec4 Is = light.Ls * _Ks * specular_factor;
-
-    // here we would normally model the light attenuation effect
-    // but since this is a directional light source that is infinitely far away
-    // attenuating the light intensity does not make sense
-
-    // final fragment color
-    fragmentColor = vec4(
-        Ia + 
-        Id*visibility +   // Task 4.3 Use visibility
-        Is*visibility );
-}

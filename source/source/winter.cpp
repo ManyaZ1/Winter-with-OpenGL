@@ -38,7 +38,7 @@ void mainLoop();
 void free();
 
 #define W_WIDTH  1800
-#define W_HEIGHT  940
+#define W_HEIGHT  900
 #define TITLE "Winter"
 
 #define SHADOW_WIDTH 1024
@@ -93,6 +93,7 @@ GLuint depthMapSampler2;
 GLuint lightVPLocation;
 GLuint light2VPLocation;
 
+
 //scale textures
 GLuint uvScaleLocation;
 
@@ -110,7 +111,7 @@ GLuint waterTexture2 ;
 GLuint bottomTexture ;
 GLuint maskTexture;
 GLuint sunTexture;
-
+GLuint skyTexture;
 // locations for miniMapProgram
 GLuint quadTextureSamplerLocation;
 
@@ -256,7 +257,7 @@ void createContext() {
 	LaLocation2 = glGetUniformLocation(shaderProgram, "light2.La");
 	LdLocation2 = glGetUniformLocation(shaderProgram, "light2.Ld");
 	LsLocation2 = glGetUniformLocation(shaderProgram, "light2.Ls");
-
+	
 	//hw 4
 	normDirLocation = glGetUniformLocation(shaderProgram, "normDir");
 	// Task 1.4
@@ -348,6 +349,13 @@ void createContext() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
+	skyTexture = loadSOIL("assets/sky2.jpg");
+	glBindTexture(GL_TEXTURE_2D, skyTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
 }
 
 void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
@@ -361,6 +369,35 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
 	glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
 	glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
 
+	// sky 
+	glDisable(GL_CULL_FACE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthMask(GL_FALSE);
+	mat4 skydomeModelMatrix = glm::translate(mat4(1.0f), camera->position) * glm::scale(mat4(1.0f), vec3(50.0f));
+	glUniform1f(normDirLocation, -1.0f); // invert normals
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &skydomeModelMatrix[0][0]); // add to vertex shader as M
+
+	// --- NEW SKY TEXTURE SETUP ---
+	glUniform1i(useTextureLocation, 3); // Set mode to 3 for Skydome logic in shader
+	glActiveTexture(GL_TEXTURE7);       // Activate a new texture unit (7)
+	glBindTexture(GL_TEXTURE_2D, skyTexture); // Bind your new sky texture
+
+	// fragment shader: uniform sampler2D skyTex; // And get its location in C++:
+	// GLuint skyTexLocation = glGetUniformLocation(shaderProgram, "skyTex");
+	// Then set the texture unit:
+	glUniform1i(glGetUniformLocation(shaderProgram, "skyTex"), 7);
+	// -----------------------------
+
+	sphere->bind();
+	sphere->draw();
+	//glEnable(GL_CULL_FACE);
+	//glUniform1f(normDirLocation, 1.0f); // invert normals AGAIN
+	//glUniform1i(useTextureLocation, 1);
+	
+	glEnable(GL_CULL_FACE);
+	glDepthFunc(GL_LESS);
+	glDepthMask(GL_TRUE);
+
 	// Upload light(s)
 	uploadLight(*light); //??? giati 2 
 
@@ -369,7 +406,8 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
 	//glUniform1i(useTextureLocation, 0); // critical: no textures
 
 	/*TERRAIN TEXTURE*/
-	glUniform1i(useTextureLocation, 1);
+	glUniform1i(useTextureLocation, 1); // use textures
+	glUniform1f(normDirLocation, 1.0f);
 	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, terrainTexture);
 	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, terrainTexture2);
 	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, waterTexture);
@@ -383,10 +421,13 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
 	glUniform1i(glGetUniformLocation(shaderProgram, "waterTex2"), 3);
 	glUniform1i(glGetUniformLocation(shaderProgram, "bottomTex"), 4);
 	glUniform1i(glGetUniformLocation(shaderProgram, "maskTex"), 5);
+	
+
 
 	glUniform1f(glGetUniformLocation(shaderProgram, "time"), glfwGetTime());
 
 
+	
 
 	// Model matrix for terrain
 	// scale *50
@@ -412,6 +453,8 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
 
 	terrain->bind();
 	terrain->draw();
+
+	/* <========  SUN  ========> */
 
 	//light with the sunTexture
 	glUniform1i(useTextureLocation, 2);
@@ -555,7 +598,7 @@ void mainLoop() {
 
 
 
-		lighting_pass(viewMatrix, projectionMatrix);
+		//lighting_pass(viewMatrix, projectionMatrix);
 
 		// Task 1.5
 		// Rendering the scene from light's perspective when F1 is pressed

@@ -18,6 +18,7 @@ uniform float scaling_factor;
 uniform mat4 P;
 uniform mat4 V;
 uniform mat4 M;
+
 uniform mat4 lightVP;
 uniform mat4 light2VP; // hw 2
 out vec4 light_position_cameraspace2;
@@ -32,8 +33,23 @@ out vec2 worldUV;
 uniform float normDir;
 uniform vec2 uvScale; 
 out vec2 vertex_UV_tiled;
-void main() {
+uniform int useTexture;
 
+void main() {
+    
+if (useTexture == 3) {
+    gl_Position =  P * V * M * vec4(vertexPosition_modelspace, 1);
+    
+    // Generate spherical UVs for sky dome
+    vec3 normPos = normalize(vertexPosition_modelspace);
+    vertex_UV.x = 0.5 + atan(normPos.z, normPos.x) / (2.0 * 3.14159265359);
+    vertex_UV.y = 0.5 - asin(normPos.y) / 3.14159265359;
+    return;
+}
+
+
+    else {
+        
     // Output position of the vertex
     gl_Position =  P * V * M * vec4(vertexPosition_modelspace, 1);
     
@@ -52,5 +68,5 @@ void main() {
     // light space 2
     light_position_cameraspace2 = V * vec4(light2.lightPosition_worldspace, 1);
     vertex_position_lightspace2 = light2VP * M * vec4(vertexPosition_modelspace, 1);
-
+    }
 }
