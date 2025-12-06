@@ -7,6 +7,7 @@ in vec2 vertex_UV;
 in vec4 vertex_position_lightspace;
 in vec4 vertex_position_lightspace2;           
 in vec4 light_position_cameraspace2;
+in vec2 vertex_UV_tiled;
 uniform sampler2D shadowMapSampler;
 uniform sampler2D diffuseColorSampler;
 uniform sampler2D specularColorSampler;
@@ -157,20 +158,20 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
 
     if (useTexture == 1) {
     vec3 terrainColor = mix(
-        texture(terrainTex, vertex_UV).rgb,
-        texture(terrainTex2, vertex_UV).rgb,
+        texture(terrainTex, vertex_UV_tiled).rgb,
+        texture(terrainTex2, vertex_UV_tiled).rgb,
         0.3
     );
     vec2 waterUV1 = vertex_UV + vec2(time*0.005, time*0.005);
-    vec2 waterUV2 = vertex_UV + vec2(-time*0.003, time*0.004);
+    vec2 waterUV2 = vertex_UV  + vec2(-time*0.003, time*0.007);
     vec3 waterColor = mix(
         texture(waterTex, waterUV1).rgb,
         texture(waterTex2, waterUV2).rgb,
-        0.5
+        0.3
     );
-    vec3 bottomColor = texture(bottomTex, vertex_UV).rgb;
+    vec3 bottomColor = mix(texture(waterTex2, vertex_UV).rgb, texture(bottomTex, vertex_UV).rgb, 0.3);
     float lakeMask = smoothstep(0.0, 1.0, texture(maskTex, vertex_UV).r);
-    vec3 finalWater = mix(bottomColor, waterColor, 0.5);
+    vec3 finalWater = mix(bottomColor, waterColor, 0.6);
     
     //lake mask
     _Kd.rgb = mix(terrainColor, finalWater, lakeMask);

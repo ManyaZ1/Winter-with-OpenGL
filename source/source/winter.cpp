@@ -30,9 +30,9 @@ void createContext();
 void mainLoop();
 void free();
 
-#define W_WIDTH 1024
-#define W_HEIGHT 768
-#define TITLE "Lab 06"
+#define W_WIDTH  2000
+#define W_HEIGHT  940
+#define TITLE "Winter"
 
 #define SHADOW_WIDTH 1024
 #define SHADOW_HEIGHT 1024
@@ -84,6 +84,11 @@ GLuint depthMapSampler;
 GLuint depthMapSampler2;
 GLuint lightVPLocation;
 GLuint light2VPLocation;
+
+//scale textures
+GLuint uvScaleLocation;
+
+
 
 // locations for depthProgram
 GLuint shadowViewProjectionLocation;
@@ -231,6 +236,7 @@ void createContext() {
 	diffuseColorSampler = glGetUniformLocation(shaderProgram, "diffuseColorSampler");
 	specularColorSampler = glGetUniformLocation(shaderProgram, "specularColorSampler");
 	scaling_factor_location= glGetUniformLocation(shaderProgram, "scaling_factor");
+	uvScaleLocation = glGetUniformLocation(shaderProgram, "uvScale"); // <-- new
 	LaLocation2 = glGetUniformLocation(shaderProgram, "light2.La");
 	LdLocation2 = glGetUniformLocation(shaderProgram, "light2.Ld");
 	LsLocation2 = glGetUniformLocation(shaderProgram, "light2.Ls");
@@ -333,11 +339,26 @@ void createContext() {
 	createDepthFBOAndTexture(depthFBO2, depthTexture2);
 
 	/* load textures */
-	terrainTexture = loadSOIL("assets/grass1.bmp");
+	terrainTexture = loadSOIL("assets/aerial_rocks.bmp");
+	glBindTexture(GL_TEXTURE_2D, terrainTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	 terrainTexture2 = loadSOIL("assets/grass2.bmp");
+	 glBindTexture(GL_TEXTURE_2D, terrainTexture2);
+	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	 waterTexture = loadSOIL("assets/water.bmp");
+	 glBindTexture(GL_TEXTURE_2D, waterTexture);
+	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	 waterTexture2 = loadSOIL("assets/water2.bmp");
-	bottomTexture = loadSOIL("assets/water2.bmp");
+	 glBindTexture(GL_TEXTURE_2D, waterTexture2);
+	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	bottomTexture = loadSOIL("assets/water.bmp");
+	glBindTexture(GL_TEXTURE_2D, bottomTexture);
+	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	maskTexture = loadSOIL("assets/lake_mask.bmp");
 
 
@@ -383,9 +404,22 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
 
 	// Model matrix for terrain
 	// scale *50
-	float scaling_factor = 10.0f;
-	mat4 modelMatrix = translate(mat4(), vec3(0.0f, -1.0f, -5.0f)) * scale(mat4(), vec3(scaling_factor, scaling_factor, scaling_factor));
-	//send scaling factor to shader
+	float scaling_factor = 60.0f;
+	mat4 modelMatrix = translate(mat4(), vec3(0.0f, -1.0f, -5.0f)) 	* scale(mat4(), vec3(scaling_factor));
+
+	// choose repeats_on_surface = number of tiles you want to see on the terrain
+	float repeats_on_surface = 600.0f;
+
+	// If you want 'repeats_on_surface' after the model scale is applied (i.e. world-space tiling):
+	float uvTile = repeats_on_surface / scaling_factor;
+
+	// If you wanted simple UV-space tiling (ignores model scale), use:
+	//float uvTile = repeats_on_surface;
+
+	// upload uv scale (same for U and V)
+	glUniform2f(uvScaleLocation, uvTile, uvTile);
+
+	// send scaling factor to shader
 	glUniform1f(scaling_factor_location, scaling_factor);
 	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &modelMatrix[0][0]);
 
@@ -592,7 +626,7 @@ void initialize() {
 	glfwSetCursorPos(window, W_WIDTH / 2, W_HEIGHT / 2);
 
 	// Gray background color
-	glClearColor(0.5f, 0.5f, 0.5f, 0.0f);
+	glClearColor(0.27f, 0.537f, 0.725f, 0.0f);
 
 	// Enable depth test
 	glEnable(GL_DEPTH_TEST);
@@ -614,9 +648,9 @@ void initialize() {
 	// Task 1.1 Creating a light source
 	// Creating a custom light 
 	light = new Light(window,
-		vec4{ 0.8f, 0.8f, 1, 1 },
-		vec4{ 0.8f, 0.8f, 1, 1 },
-		vec4{ 0.8f, 0.8f, 1, 1 },
+		vec4{ 0.894f, 0.949f, 0.949f, 1 },
+		vec4{ 0.894f, 0.949f, 0.949f, 1 },
+		vec4{ 0.894f, 0.949f, 0.949f, 1 },
 		vec3{ 0, 5, -5 }
 	);
 	light2 = new Light(window,

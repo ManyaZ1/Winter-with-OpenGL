@@ -30,7 +30,8 @@ out vec4 vertex_position_lightspace;
 out vec4 vertex_position_lightspace2;
 out vec2 worldUV;
 uniform float normDir;
-
+uniform vec2 uvScale; 
+out vec2 vertex_UV_tiled;
 void main() {
 
     // Output position of the vertex
@@ -41,8 +42,8 @@ void main() {
     //vertex_normal_cameraspace = V * M * vec4(vertexNormal_modelspace, 0);
     vertex_normal_cameraspace = V * M * vec4(vertexNormal_modelspace * normDir, 0);
     light_position_cameraspace = V * vec4(light.lightPosition_worldspace, 1);
-    vertex_UV = vertexUV ; //?
-    
+    vertex_UV = vertexUV; //?
+    vertex_UV_tiled = vertexUV * uvScale;
 
     // Task 4.2
 
