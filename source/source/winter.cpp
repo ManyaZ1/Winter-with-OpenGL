@@ -347,9 +347,9 @@ void createContext() {
 	sunTexture = loadSOIL("assets/fiery.bmp");
 	glBindTexture(GL_TEXTURE_2D, sunTexture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, 0x2803, GL_REPEAT);
 
-	skyTexture = loadSOIL("assets/sky2.jpg");
+	skyTexture = loadSOIL("assets/sky3.jpg");
 	glBindTexture(GL_TEXTURE_2D, skyTexture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -373,7 +373,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
 	glDisable(GL_CULL_FACE);
 	glDepthFunc(GL_LEQUAL);
 	glDepthMask(GL_FALSE);
-	mat4 skydomeModelMatrix = glm::translate(mat4(1.0f), camera->position) * glm::scale(mat4(1.0f), vec3(50.0f));
+	mat4 skydomeModelMatrix = glm::translate(mat4(1.0f), camera->position) * glm::scale(mat4(1.0f), vec3(30.0f));
 	glUniform1f(normDirLocation, -1.0f); // invert normals
 	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &skydomeModelMatrix[0][0]); // add to vertex shader as M
 

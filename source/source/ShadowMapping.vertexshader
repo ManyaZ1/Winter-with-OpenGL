@@ -37,16 +37,29 @@ uniform int useTexture;
 
 void main() {
     
+//if (useTexture == 3) {
+//    gl_Position =  P * V * M * vec4(vertexPosition_modelspace, 1);
+//    
+//    // Generate spherical UVs for sky dome
+//    vec3 normPos = normalize(vertexPosition_modelspace);
+//    vertex_UV.x = 0.5 + atan(normPos.z, normPos.x) / (2.0 * 3.14159265359);
+//    vertex_UV.y = 0.5 - asin(normPos.y) / 3.14159265359;
+//    return;
+//}
 if (useTexture == 3) {
     gl_Position =  P * V * M * vec4(vertexPosition_modelspace, 1);
     
     // Generate spherical UVs for sky dome
     vec3 normPos = normalize(vertexPosition_modelspace);
-    vertex_UV.x = 0.5 + atan(normPos.z, normPos.x) / (2.0 * 3.14159265359);
-    vertex_UV.y = 0.5 - asin(normPos.y) / 3.14159265359;
+    
+    // Better spherical mapping
+    float pi = 3.14159265359;
+    //pi = 3.0f;
+    vertex_UV.x = 0.5 + atan(normPos.x, normPos.z) / (2.0 * pi);
+    vertex_UV.y = 0.5 + asin(normPos.y) / pi;
+    
     return;
 }
-
 
     else {
         
