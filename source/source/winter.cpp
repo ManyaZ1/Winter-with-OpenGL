@@ -410,7 +410,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
 	glBindTexture(GL_TEXTURE_2D, sunTexture);
 	glUniform1i(glGetUniformLocation(shaderProgram, "sunTex"), 6);
 	// Model matrix for sun
-	mat4 sunModel = translate(mat4(), light->lightPosition_worldspace) * scale(mat4(), vec3(0.2f));
+	mat4 sunModel = translate(mat4(), light->lightPosition_worldspace) * scale(mat4(), vec3(0.8f));
 	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &sunModel[0][0]);
 	sphere->bind();
 	sphere->draw();
@@ -640,7 +640,7 @@ void initialize() {
 		vec4{ 0.894f, 0.949f, 0.949f, 1 },
 		vec4{ 0.894f, 0.949f, 0.949f, 1 },
 		vec4{ 0.894f, 0.949f, 0.949f, 1 },
-		vec3{ 0, 5, -5 }
+		vec3{ 0, 20, -5 }
 	);
 	light2 = new Light(window,
 		vec4{ 1, 1, 1, 1 },

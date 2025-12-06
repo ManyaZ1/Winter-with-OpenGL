@@ -159,7 +159,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     vec4 _Ka = mtl.Ka;
     float _Ns = mtl.Ns;
     if (useTexture == 2) {
-        vec3 sunColor = texture(sunTex, 10* vertex_UV + vec2(time*0.05, time*0.05)).rgb;
+        vec3 sunColor = texture(sunTex, 5 * vertex_UV + vec2(time*0.05, time*0.05)).rgb; //πολλαπλασιασμος των uv για να επαναληφθει πολλες φορες η υφή
         _Kd.rgb = sunColor;
         _Ka.rgb =  _Kd.rgb;
         _Ks.rgb = _Kd.rgb; // or keep as is
