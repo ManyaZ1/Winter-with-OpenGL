@@ -362,10 +362,11 @@ void createContext() {
 
 }
 
-void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix) {
+void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height) {
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glViewport(0, 0, W_WIDTH, W_HEIGHT);
+	//glViewport(0, 0, W_WIDTH, W_HEIGHT);
+	glViewport(0, 0, screen_width, screen_height);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glUseProgram(shaderProgram);
@@ -568,6 +569,10 @@ void mainLoop() {
 	// Create the depth buffer
 	depth_pass(light_view, light_proj, depthFBO); // Call the depth pass once at the beginning
 	//depth_pass(light2_view, light2_proj, depthFBO2); //hw2
+	
+	// get screen size
+	int fb_width, fb_height;
+	glfwGetFramebufferSize(window, &fb_width, &fb_height);
 
 	do {
 		if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
@@ -608,11 +613,13 @@ void mainLoop() {
 		// Rendering the scene from light's perspective when F1 is pressed
 
 		if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS) {
-			lighting_pass(light_view, light_proj);
+			//lighting_pass(light_view, light_proj);
+			lighting_pass(light_view, light_proj, fb_width, fb_height);
 		}
 		else {
 			// Render the scene from camera's perspective
-			lighting_pass(viewMatrix, projectionMatrix);
+			//lighting_pass(viewMatrix, projectionMatrix);
+			lighting_pass(viewMatrix, projectionMatrix, fb_width, fb_height);
 		}
 		//*/
 
@@ -664,6 +671,10 @@ void initialize() {
 			"Try the 2.1 version.\n"));
 	}
 	glfwMakeContextCurrent(window);
+	//!!
+	// local variables to hold the current window size
+	int current_width, current_height;
+	glfwGetFramebufferSize(window, &current_width, &current_height);
 
 	// Start GLEW extension handler
 	glewExperimental = GL_TRUE;

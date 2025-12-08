@@ -10,7 +10,7 @@ Camera::Camera(GLFWwindow* window) : window(window) {
     position = vec3(0, 3, 5);
     horizontalAngle = 3.14f;
     verticalAngle = 0.0f;
-    FoV = 45.0f;
+    FoV = 60.0f; //45.0f;
     speed = 3.0f;
     mouseSpeed = 0.001f;
     fovSpeed = 0.25f;
@@ -31,6 +31,13 @@ void Camera::update() {
     int width, height;
     glfwGetWindowSize(window, &width, &height);
 
+    //fix error 
+    if (width == 0 || height == 0) {
+        // Exit early to prevent the glm::perspective assertion failure.
+        // The main loop's glfwGetWindowAttrib check (if implemented) will also help,
+        // but this protects the Camera class itself.
+        return;
+    }
     // Reset mouse position for next frame
     glfwSetCursorPos(window, width / 2, height / 2);
 
@@ -115,7 +122,8 @@ void Camera::update() {
     }
 
     // Task 5.7: construct projection and view matrices
-    projectionMatrix = perspective(radians(FoV), 4.0f / 3.0f, 0.1f, 100.0f);
+    float aspectRatio = (float)width / (float)height;
+    projectionMatrix = perspective(radians(FoV), aspectRatio, 0.1f, 100.0f);
     viewMatrix = lookAt(
         position,
         position + direction,
