@@ -346,13 +346,17 @@ void createContext() {
 
 	sunTexture = loadSOIL("assets/fiery.bmp");
 	glBindTexture(GL_TEXTURE_2D, sunTexture);
+	/*glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, 0x2803, GL_REPEAT);*/
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, 0x2803, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-	skyTexture = loadSOIL("assets/sky3.jpg");
-	glBindTexture(GL_TEXTURE_2D, skyTexture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	skyTexture = loadSOIL("assets/sky5.jpg");
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -639,7 +643,20 @@ void initialize() {
 
 
 	// Open a window and create its OpenGL context
-	window = glfwCreateWindow(W_WIDTH, W_HEIGHT, TITLE, NULL, NULL);
+	//window = glfwCreateWindow(W_WIDTH, W_HEIGHT, TITLE, NULL, NULL);
+	
+	// 1. Get the primary monitor handle
+	GLFWmonitor* primary_monitor = glfwGetPrimaryMonitor();
+
+	// 2. Get the video mode of the primary monitor to use its resolution
+	const GLFWvidmode* mode = glfwGetVideoMode(primary_monitor);
+
+	// 3. Create the window, passing the monitor handle and using its resolution
+	// The W_WIDTH and W_HEIGHT are replaced by the monitor's resolution for clarity,
+	// but you can still use your variables if you prefer.
+	// The last two NULL arguments are for the monitor and share context respectively.
+	window = glfwCreateWindow(mode->width, mode->height, TITLE, primary_monitor, NULL);
+
 	if (window == NULL) {
 		glfwTerminate();
 		throw runtime_error(string(string("Failed to open GLFW window.") +

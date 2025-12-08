@@ -33,33 +33,83 @@ out vec2 worldUV;
 uniform float normDir;
 uniform vec2 uvScale; 
 out vec2 vertex_UV_tiled;
+out vec3 fragPos_modelspace;
 uniform int useTexture;
 
+// Source - https://stackoverflow.com/a
+// Posted by HuaTham, modified by community. See post 'Timeline' for change history
+// Retrieved 2025-12-07, License - CC BY-SA 3.0
+
+float atan2(in float y, in float x)
+{
+    float PI = 3.14159265359;
+    bool s = (abs(x) > abs(y));
+    return x == 0.0 ? sign(y)*PI/2 : atan(y, x);
+    //return mix(PI/2.0 - atan(x,y), atan(y,x), s);
+}
+
+
+
 void main() {
+   if (useTexture == 3) {
+        // position for rasterizer
+        gl_Position = P * V * M * vec4(vertexPosition_modelspace, 1.0);
+
+        // pass model-space position to fragment so we can compute UVs per-fragment
+        fragPos_modelspace = vertexPosition_modelspace;
+
+        //  vertex_UV as placeholder but but not used 
+        vertex_UV = vec2(0.0);
+        return;
+    }
+    /*if (useTexture == 3) {
+        gl_Position =  P * V * M * vec4(vertexPosition_modelspace, 1);
     
+        vec3 normPos = normalize(vertexPosition_modelspace);
+        float pi = 3.14159265359;
+
+        // Stable spherical mapping with no seams
+        vertex_UV.x = clamp(atan2(normPos.z, normPos.x+1e-8) / (2.0 * pi) + 0.5,-1.0, 1.0  );
+
+        // Prevent asin precision issues at horizon
+        float y = clamp(normPos.y, -1.0, 1.0);
+        vertex_UV.y = (asin(y) / pi + 0.5);
+    }*/
+    
+/*if (useTexture == 3) {
+    gl_Position =  P * V * M * vec4(vertexPosition_modelspace, 1);
+    
+    vec3 normPos = normalize(vertexPosition_modelspace);
+    float pi = 3.14159265359;
+
+    // Stable spherical mapping with no seams
+    vertex_UV.x = clamp(atan2(normPos.z, normPos.x+1e-8) / (2.0 * pi) + 0.5,-1.0, 1.0  );
+
+    // Prevent asin precision issues at horizon
+    float y = clamp(normPos.y, -1.0, 1.0);
+    vertex_UV.y = (asin(y) / pi + 0.5);
+    
+    // Optional: force wrap cleanly
+    //vertex_UV.y = fract(vertex_UV.y);
+    }*/
 //if (useTexture == 3) {
 //    gl_Position =  P * V * M * vec4(vertexPosition_modelspace, 1);
 //    
 //    // Generate spherical UVs for sky dome
 //    vec3 normPos = normalize(vertexPosition_modelspace);
-//    vertex_UV.x = 0.5 + atan(normPos.z, normPos.x) / (2.0 * 3.14159265359);
-//    vertex_UV.y = 0.5 - asin(normPos.y) / 3.14159265359;
-//    return;
-//}
-if (useTexture == 3) {
-    gl_Position =  P * V * M * vec4(vertexPosition_modelspace, 1);
+//    
+//    // Better spherical mapping
+//    float pi = 3.14159265359;
+//    //pi = 3.0f;
+//    if (abs(normPos.x)< 0.0001 && abs(normPos.z)<0.0001)    {
+//        vertex_UV.x = 0.5;
+//        vertex_UV.y = 0.5 + asin(normPos.y) / pi;
+//    }
+//    else{
+//        vertex_UV.x = 0.5 + atan(normPos.x, normPos.z) / (2.0 * pi);
+//        vertex_UV.y = 0.5 + asin(normPos.y) / pi;
+//    }    return;}
     
-    // Generate spherical UVs for sky dome
-    vec3 normPos = normalize(vertexPosition_modelspace);
-    
-    // Better spherical mapping
-    float pi = 3.14159265359;
-    //pi = 3.0f;
-    vertex_UV.x = 0.5 + atan(normPos.x, normPos.z) / (2.0 * pi);
-    vertex_UV.y = 0.5 + asin(normPos.y) / pi;
-    
-    return;
-}
 
     else {
         

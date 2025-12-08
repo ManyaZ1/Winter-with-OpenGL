@@ -45,7 +45,7 @@ struct Material {
     float Ns; 
 };
 uniform Material mtl;
-
+in vec3 fragPos_modelspace; //new
 out vec4 fragmentColor;
 
 
@@ -55,7 +55,33 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility);
 
 
 void main() {   
-    if (useTexture == 3) {        
+    // If using the sky texture, output it directly and skip the rest
+    if (useTexture == 3) {
+        // spherical mapping in fragment shader
+        vec3 p = normalize(fragPos_modelspace);
+
+        float pi = 3.14159265358979323846;
+
+        // NOTE: use atan(z,x) so longitude runs correctly around sphere
+        float u = atan(p.z, p.x) / (2.0 * pi) + 0.5;
+        float v = asin(clamp(p.y, -1.0, 1.0)) / pi + 0.5;
+
+        // fold into [0,1), safe for repeat-wrapped texture
+        u = fract(u);
+        v = clamp(v, 0.0, 1.0);
+
+        fragmentColor = vec4(texture(skyTex, vec2(u, v)).rgb, 1.0);
+        return;
+    }
+    else {
+    // --- LIGHT 1  ---
+        float shadow1 = ShadowCalculation(vertex_position_lightspace, shadowMapSampler);
+        float visibility1 = 1.0f - shadow1;
+    
+        vec3 color1 = calculatePhong(light, light_position_cameraspace, visibility1);
+        fragmentColor = vec4(color1, 1.0);
+    }
+   /* if (useTexture == 3) {        
         // 3. Output the final color and skip the rest of the light/shadow calculation
         fragmentColor = vec4(texture(skyTex, vertex_UV).rgb, 1.0);
        
@@ -67,7 +93,7 @@ void main() {
     
     vec3 color1 = calculatePhong(light, light_position_cameraspace, visibility1);
     fragmentColor = vec4(color1, 1.0);
-    }
+    }*/
     // --- LIGHT 2  ---
 //    float shadow2 = ShadowCalculation(vertex_position_lightspace2, shadowMapSampler2);
 //    float visibility2 = 1.0f - shadow2;
