@@ -23,7 +23,7 @@
 
 #include <vector>
 
-#define SCALING_FACTOR 60 //lab.cpp kai camera.cpp
+#define SCALING_FACTOR 100//60 //lab.cpp kai camera.cpp
 
 
 
