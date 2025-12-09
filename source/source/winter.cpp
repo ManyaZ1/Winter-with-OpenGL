@@ -308,10 +308,10 @@ void createContext() {
 
 	// Add some clouds
 	cloudSystem->addCloud(vec3(0, 20, -10), 5.0f);
-	cloudSystem->addCloud(vec3(15, 22, -5), 6.0f);
+	cloudSystem->addCloud(vec3(15, 32, 5), 6.0f);
 	cloudSystem->addCloud(vec3(-10, 18, -20), 4.5f);
-	cloudSystem->addCloud(vec3(20, 25, -15), 5.5f);
-	cloudSystem->addCloud(vec3(-25, 19, -8), 3.0f);
+	cloudSystem->addCloud(vec3(20, 52, -15), 5.5f);
+	cloudSystem->addCloud(vec3(-25, 90, 8), 3.0f);
 	
 
 	// Task 2.2: Creating a 2D quad to visualize the depthmap
@@ -650,9 +650,9 @@ void mainLoop() {
 		if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
 			// Spawn cloud at random position
 			vec3 pos = vec3(
-				-30.0f + (rand() % 60),  // X: -30 to 30
-				15.0f + (rand() % 15),    // Y: 15 to 30
-				-30.0f + (rand() % 60)    // Z: -30 to 30
+				-60.0f + (rand() % 120),  // X: -30 to 60
+				15.0f + (rand() % 45),    // Y: 15 to 60
+				-60.0f + (rand() % 120)    // Z: -60 to 60
 			);
 			float size = 4.0f + (rand() % 5); // Size: 4 to 9
 			cloudSystem->addCloud(pos, size);
