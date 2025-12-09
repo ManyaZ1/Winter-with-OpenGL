@@ -222,7 +222,7 @@ GLuint loadSOIL(const char* imagePath) {
     texture = SOIL_load_OGL_texture
     (
         imagePath,
-        SOIL_LOAD_RGB,
+        SOIL_LOAD_RGBA, //my change
         SOIL_CREATE_NEW_ID,
         SOIL_FLAG_TEXTURE_REPEATS | SOIL_FLAG_POWER_OF_TWO
     );

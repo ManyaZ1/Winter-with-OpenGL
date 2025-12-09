@@ -19,11 +19,13 @@
 #include <common/model.h>
 #include <common/texture.h>
 #include <common/light.h> 
-
+#include "common/cloud.h"
 
 #include <vector>
 
-#define SCALING_FACTOR 100//60 //lab.cpp kai camera.cpp
+
+
+#define SCALING_FACTOR 200//60 //lab.cpp kai camera.cpp
 
 
 
@@ -116,6 +118,11 @@ GLuint skyTexture;
 GLuint quadTextureSamplerLocation;
 
 GLuint normDirLocation;
+
+// clouds
+CloudSystem* cloudSystem;
+
+
 
 // Create two sample materials
 const Material polishedSilver
@@ -211,6 +218,7 @@ void createDepthFBOAndTexture(GLuint& fboID, GLuint& textureID) {
 
 
 void free() {
+	delete cloudSystem;
 	// Delete Shader Programs
 	glDeleteProgram(shaderProgram);
 	glDeleteProgram(depthProgram);
@@ -293,6 +301,17 @@ void createContext() {
 	// Creating a Drawable object using vertices, uvs, normals
 	// In this task we will create a plane on which the shadows will be displayed
 
+	/* CLOUD SYSTEM */
+	// Initialize cloud system
+	cloudSystem = new CloudSystem();
+	cloudSystem->initialize(shaderProgram);
+
+	// Add some clouds
+	cloudSystem->addCloud(vec3(0, 20, -10), 5.0f);
+	cloudSystem->addCloud(vec3(15, 22, -5), 6.0f);
+	cloudSystem->addCloud(vec3(-10, 18, -20), 4.5f);
+	cloudSystem->addCloud(vec3(20, 25, -15), 5.5f);
+	cloudSystem->addCloud(vec3(-25, 19, -8), 3.0f);
 	
 
 	// Task 2.2: Creating a 2D quad to visualize the depthmap
@@ -557,7 +576,7 @@ void renderMiniMap() {
 
 
 void mainLoop() {
-
+	float lastTime = glfwGetTime();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	light->update();
 	//light2->update();
@@ -575,6 +594,10 @@ void mainLoop() {
 	glfwGetFramebufferSize(window, &fb_width, &fb_height);
 
 	do {
+		// Calculate delta time
+		float currentTime = glfwGetTime();
+		float deltaTime = currentTime - lastTime;
+		lastTime = currentTime;
 		if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
 			Light::chosen_light_id = 1;
 		}
@@ -600,6 +623,8 @@ void mainLoop() {
 		//αν σταθερη φωτεινη πηγη δεν εχει νοημα να το κανω καθε frame
 		// κάθε δευτερόλεπτο
 
+		cloudSystem->update(deltaTime);
+
 		// Getting camera information
 		camera->update();
 		mat4 projectionMatrix = camera->projectionMatrix;
@@ -621,8 +646,24 @@ void mainLoop() {
 			//lighting_pass(viewMatrix, projectionMatrix);
 			lighting_pass(viewMatrix, projectionMatrix, fb_width, fb_height);
 		}
-		//*/
 
+		if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
+			// Spawn cloud at random position
+			vec3 pos = vec3(
+				-30.0f + (rand() % 60),  // X: -30 to 30
+				15.0f + (rand() % 15),    // Y: 15 to 30
+				-30.0f + (rand() % 60)    // Z: -30 to 30
+			);
+			float size = 4.0f + (rand() % 5); // Size: 4 to 9
+			cloudSystem->addCloud(pos, size);
+		}
+
+		//*/
+		// Render clouds
+		glUseProgram(shaderProgram);
+		glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
+		glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
+		cloudSystem->render(viewMatrix, projectionMatrix);
 		// Task 2.2:
 		renderMiniMap();
 

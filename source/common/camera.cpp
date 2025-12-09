@@ -3,11 +3,11 @@
 #include "camera.h"
 #include <vector>
 
-#define SCALING_FACTOR 60 //lab.cpp kai camera.cpp
+#define SCALING_FACTOR 100 //lab.cpp kai camera.cpp
 using namespace glm;
 
 Camera::Camera(GLFWwindow* window) : window(window) {
-    position = vec3(0, 3, 5);
+    position = vec3(15, 3, -15);
     horizontalAngle = 3.14f;
     verticalAngle = 0.0f;
     FoV = 45.0f;
@@ -123,7 +123,7 @@ void Camera::update() {
 
     // Task 5.7: construct projection and view matrices
     float aspectRatio = (float)width / (float)height;
-    projectionMatrix = perspective(radians(FoV), aspectRatio, 0.1f, 100.0f);
+    projectionMatrix = perspective(radians(FoV), aspectRatio, 0.1f, 200.0f);
     viewMatrix = lookAt(
         position,
         position + direction,

@@ -55,6 +55,21 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility);
 
 
 void main() {   
+    // Mode 4 for simple textured billboards (clouds)
+    if (useTexture == 4) {
+        vec4 texColor = texture(sunTex, vertex_UV);
+        
+        // --- ADD THIS LOGIC (Alpha Test) ---
+        // If the fragment is nearly transparent, discard it completely.
+        // This removes the rectangular outline.
+        if (texColor.a < 0.1) {
+            discard;
+        }
+        // -----------------------------------
+        
+        fragmentColor = texColor; // Use RGB and Alpha directly
+        return;
+    }
     // If using the sky texture, output it directly and skip the rest
     if (useTexture == 3) {
         // spherical mapping in fragment shader

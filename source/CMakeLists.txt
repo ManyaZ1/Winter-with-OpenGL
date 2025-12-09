@@ -115,6 +115,8 @@ add_executable(source
   common/texture.h
   common/light.cpp
   common/light.h
+  common/cloud.h
+  common/cloud.cpp
 
   source/ShadowMapping.fragmentshader
   source/ShadowMapping.vertexshader
