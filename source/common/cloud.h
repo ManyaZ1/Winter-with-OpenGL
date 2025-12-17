@@ -14,6 +14,7 @@ struct Cloud {
     float size;
     float alpha;
     float speed;
+    float rotationAngle;
 };
 
 class CloudSystem {
@@ -26,6 +27,7 @@ private:
     GLuint modelMatrixLocation;
     GLuint useTextureLocation;
     GLuint textureLocation;
+    GLuint uvRotationLocation;
 
 public:
     CloudSystem();

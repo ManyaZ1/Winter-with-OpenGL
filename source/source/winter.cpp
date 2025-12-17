@@ -283,9 +283,15 @@ void createContext() {
 	// --- miniMapProgram ---
 	quadTextureSamplerLocation = glGetUniformLocation(miniMapProgram, "textureSampler");
 
+	//cloud
+	//uvRotationLocation = glGetUniformLocation(shaderProgram, "uvRotationAngle");
+
+
+
+
 	// Loading a model
 	// The terrain object from Gaea is loaded as terrain
-	std::string modelPath = "assets/Mesher_LOD2.obj";
+	std::string modelPath = "assets/Mesher_LOD3.obj";
 	terrain = new Drawable(modelPath);
 
 	// Original objects are still needed for light visualization (model2) or removed entirely

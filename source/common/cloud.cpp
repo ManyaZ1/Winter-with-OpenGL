@@ -30,7 +30,7 @@ void CloudSystem::initialize(GLuint shaderProgram) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
+    uvRotationLocation = glGetUniformLocation(shaderProgram, "uvRotationAngle");
     // Get shader uniform locations
     modelMatrixLocation = glGetUniformLocation(shaderProgram, "M");
     useTextureLocation = glGetUniformLocation(shaderProgram, "useTexture");
@@ -45,6 +45,10 @@ void CloudSystem::addCloud(vec3 position, float size) {
     cloud.size = size;
     cloud.alpha = 0.5f;
     cloud.speed = 0.5f + (rand() % 10) / 10.0f; // Random speed 0.5-1.5
+    // limit between 210 and 230
+	float randomDegree = (float)(rand() % 20) - 10.0f; //+-10 degrees
+    cloud.rotationAngle = (float)(220 +randomDegree);
+    //cloud.rotationAngle = (float)(rand() % 360) * 3.14159f / 180.0f;
     clouds.push_back(cloud);
 }
 
@@ -89,6 +93,7 @@ void CloudSystem::render(mat4 viewMatrix, mat4 projectionMatrix) {
         billboard[2] = vec4(cameraForward * cloud.size, 0);
         billboard[3] = vec4(cloud.position, 1);
 
+        glUniform1f(uvRotationLocation, cloud.rotationAngle);
         glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &billboard[0][0]);
 
         cloudQuad->bind();

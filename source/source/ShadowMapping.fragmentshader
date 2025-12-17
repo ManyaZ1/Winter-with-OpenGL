@@ -47,7 +47,7 @@ struct Material {
 uniform Material mtl;
 in vec3 fragPos_modelspace; //new
 out vec4 fragmentColor;
-
+uniform float uvRotationAngle;
 
 
 float ShadowCalculation(vec4 fragPositionLightspace, sampler2D depthMap);
@@ -57,8 +57,21 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility);
 void main() {   
     // Mode 4 for simple textured billboards (clouds)
     if (useTexture == 4) {
-        vec4 texColor = texture(sunTex, vertex_UV);
+        //vec4 texColor = texture(sunTex, vertex_UV);
+        vec2 rotatedUV = vertex_UV;
+        float cosA = cos(uvRotationAngle);
+        float sinA = sin(uvRotationAngle);
         
+        // 1. Center the UVs (shift [0,1] to [-0.5, 0.5])
+        vec2 centeredUV = rotatedUV - 0.5;
+        
+        // 2. Apply 2x2 Rotation Matrix
+        rotatedUV.x = centeredUV.x * cosA - centeredUV.y * sinA;
+        rotatedUV.y = centeredUV.x * sinA + centeredUV.y * cosA;
+        
+        // 3. Shift back to [0, 1] range
+        rotatedUV += 0.5;
+        vec4 texColor = texture(sunTex, rotatedUV);
         // --- ADD THIS LOGIC (Alpha Test) ---
         // If the fragment is nearly transparent, discard it completely.
         // This removes the rectangular outline.
