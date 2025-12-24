@@ -1,4 +1,4 @@
-// Include C++ headers
+ï»¿// Include C++ headers
 #include <iostream>
 #include <string>
 
@@ -71,10 +71,17 @@ Drawable* plane;
 GLuint modelDiffuseTexture, modelSpecularTexture;
 GLuint depthFBO, depthTexture;
 GLuint depthFBO2, depthTexture2;
-
+GLuint lightDirectionLocation;
 // Global instance to hold your terrain data after loading
 
 Drawable* quad;
+
+// tree
+Drawable* treeModel1;
+GLuint treeDiffuseTex;
+
+
+
 
 // locations for shaderProgram
 GLuint scaling_factor_location;
@@ -114,6 +121,9 @@ GLuint bottomTexture ;
 GLuint maskTexture;
 GLuint sunTexture;
 GLuint skyTexture;
+// In winter.cpp
+GLuint trunkTexture ;
+GLuint needleTexture ;
 // locations for miniMapProgram
 GLuint quadTextureSamplerLocation;
 
@@ -150,8 +160,10 @@ void uploadLight(const Light& light) {
 	glUniform4f(LaLocation, light.La.r, light.La.g, light.La.b, light.La.a);
 	glUniform4f(LdLocation, light.Ld.r, light.Ld.g, light.Ld.b, light.Ld.a);
 	glUniform4f(LsLocation, light.Ls.r, light.Ls.g, light.Ls.b, light.Ls.a);
-	glUniform3f(lightPositionLocation, light.lightPosition_worldspace.x,
-		light.lightPosition_worldspace.y, light.lightPosition_worldspace.z);
+	glUniform3fv(lightDirectionLocation, 1,
+		&light.direction[0]);
+	/*glUniform3f(lightPositionLocation, light.lightPosition_worldspace.x,
+		light.lightPosition_worldspace.y, light.lightPosition_worldspace.z);*/
 }
 void uploadLight(const Light& light, const Light& light2) {
 	glUniform4f(LaLocation, light.La.r, light.La.g, light.La.b, light.La.a);
@@ -227,10 +239,11 @@ void free() {
 	glfwTerminate();
 }
 void createContext() {
+
 	// Create and compile our GLSL program from the shader
 	shaderProgram = loadShaders("ShadowMapping.vertexshader", "ShadowMapping.fragmentshader");
 
-	// Task 3.1 
+	// Task 3.1Â 
 	// Create and load the shader program for the depth buffer construction
 	// You need to load and use the Depth.vertexshader, Depth.fragmentshader
 	depthProgram = loadShaders("Depth.vertexshader", "Depth.fragmentshader");
@@ -257,7 +270,11 @@ void createContext() {
 	LdLocation = glGetUniformLocation(shaderProgram, "light.Ld");
 	LsLocation = glGetUniformLocation(shaderProgram, "light.Ls");
 	lightPositionLocation = glGetUniformLocation(shaderProgram, "light.lightPosition_worldspace");
-	lightPositionLocation2 = glGetUniformLocation(shaderProgram, "light2.lightPosition_worldspace");
+	//lightPositionLocation2 = glGetUniformLocation(shaderProgram, "light2.lightPosition_worldspace");
+	lightDirectionLocation =
+		glGetUniformLocation(shaderProgram, "lightDirection_worldspace");
+	//std::cout << "lightDirectionLocation: " << lightDirectionLocation << std::endl;
+	
 	diffuseColorSampler = glGetUniformLocation(shaderProgram, "diffuseColorSampler");
 	specularColorSampler = glGetUniformLocation(shaderProgram, "specularColorSampler");
 	scaling_factor_location= glGetUniformLocation(shaderProgram, "scaling_factor");
@@ -303,6 +320,20 @@ void createContext() {
 	// model2 (sphere) is used for light visualization, keep loading it
 	sphere = new Drawable("earth.obj");
 
+	// Load tree models
+	// After glUseProgram(shaderProgram);
+	GLuint nodePositionsLocation = glGetUniformLocation(shaderProgram, "nodePositions");
+	if (nodePositionsLocation != -1) {
+		vec3 defaultNodes[4] = {
+			vec3(0, 0, 0),
+			vec3(0, 0, 0),
+			vec3(0, 0, 0),
+			vec3(0, 0, 0)
+		};
+		glUniform3fv(nodePositionsLocation, 4, &defaultNodes[0][0]);
+	}
+	treeModel1 = new Drawable("assets/tree.obj");
+	treeDiffuseTex = loadSOIL("assets/fir.jpg");
 	// Task 1.3
 	// Creating a Drawable object using vertices, uvs, normals
 	// In this task we will create a plane on which the shadows will be displayed
@@ -385,6 +416,31 @@ void createContext() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+
+
+	// tree
+	trunkTexture = loadSOIL("assets/bark.jpg");
+	glBindTexture(GL_TEXTURE_2D, trunkTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	//needleTexture = loadSOIL("assets/fir.jpg");
+	needleTexture = loadSOIL("assets/tree2.jpg");
+
+	glBindTexture(GL_TEXTURE_2D, needleTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	GLenum err = glGetError();
+	if (err != GL_NO_ERROR) {
+		cout << "OpenGL error after getting uniform locations: " << err << endl;
+	}
+
+	// Check if critical uniforms were found:
+	if (lightDirectionLocation == -1) cout << "WARNING: lightDirection_worldspace not found!" << endl;
+	if (projectionMatrixLocation == -1) cout << "WARNING: P not found!" << endl;
+	if (viewMatrixLocation == -1) cout << "WARNING: V not found!" << endl;
+	if (modelMatrixLocation == -1) cout << "WARNING: M not found!" << endl;
+
+
 }
 
 void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height) {
@@ -395,11 +451,14 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glUseProgram(shaderProgram);
-
+	GLenum err = glGetError();
+	/*if (err != GL_NO_ERROR) {
+		std::cout << "OpenGL Error after useProgram: " << err << std::endl;
+	}*/
 	glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
 	glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
 
-	// sky 
+	/*// sky 
 	glDisable(GL_CULL_FACE);
 	glDepthFunc(GL_LEQUAL);
 	glDepthMask(GL_FALSE);
@@ -426,16 +485,26 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	
 	glEnable(GL_CULL_FACE);
 	glDepthFunc(GL_LESS);
-	glDepthMask(GL_TRUE);
+	glDepthMask(GL_TRUE);*/
 
 	// Upload light(s)
 	uploadLight(*light); //??? giati 2 
-
+	mat4 lightVP = light->lightVP();
+	glUniformMatrix4fv(lightVPLocation, 1, GL_FALSE, &lightVP[0][0]);
+	glUniform3fv(lightDirectionLocation, 1, &light->direction[0]);
+	//std::cout << "Light direction: " << light->direction.x << ", "
+	//	<< light->direction.y << ", " << light->direction.z << std::endl;
+	//std::cout << "Light position: " << light->lightPosition_worldspace.x << ", "
+	//	<< light->lightPosition_worldspace.y << ", "
+	//	<< light->lightPosition_worldspace.z << std::endl;
 	// Use material, not textures
 	//uploadMaterial(turquoise);
 	//glUniform1i(useTextureLocation, 0); // critical: no textures
 
 	/*TERRAIN TEXTURE*/
+	glActiveTexture(GL_TEXTURE8);
+	glBindTexture(GL_TEXTURE_2D, depthTexture);
+	glUniform1i(depthMapSampler, 8);
 	glUniform1i(useTextureLocation, 1); // use textures
 	glUniform1f(normDirLocation, 1.0f);
 	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, terrainTexture);
@@ -493,8 +562,13 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glBindTexture(GL_TEXTURE_2D, sunTexture);
 	glUniform1i(glGetUniformLocation(shaderProgram, "sunTex"), 6);
 	// Model matrix for sun
-	mat4 sunModel = translate(mat4(), light->lightPosition_worldspace) * scale(mat4(), vec3(0.8f));
-	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &sunModel[0][0]);
+	//mat4 sunModel = translate(mat4(), light->lightPosition_worldspace) * scale(mat4(), vec3(0.8f));
+	//glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &sunModel[0][0]);
+	vec3 sunPos = camera->position - light->direction * 100.0f;
+	mat4 sunModel =
+		translate(mat4(1.0f), sunPos)
+		* scale(mat4(1.0f), vec3(3.0f));
+
 	sphere->bind();
 	sphere->draw();
 	/*light with simple matterial version
@@ -502,6 +576,56 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glUniform1i(useTextureLocation, 0);
 
 
+	/*===============================================================load tree===========================================================*/
+	///   /\
+	///  /  \
+    ///   ||
+    glUniform1i(useTextureLocation, 5);
+
+	// Trunk â†’ texture unit 0
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, trunkTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "trunkTex"), 0);
+
+	// Needles â†’ texture unit 1
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, needleTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "needleTex"), 1);
+
+	// Optional: stronger tiling for tree
+	glUniform2f(uvScaleLocation, 1.0f, 1.0f);
+	/*// 1. Activate Slot 0 for the Trunk
+	glUniform1i(glGetUniformLocation(shaderProgram, "useTexture"), 5);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, trunkTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "trunkTex"), 0);
+
+	// 2. Activate Slot 1 for the Cones
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, needleTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "needleTex"), 1);*/
+
+	//// 1. Set the shader mode (e.g., use 4 for alpha-discard logic)
+	//glUniform1i(useTextureLocation, 4); 
+
+	//// 2. Bind the tree texture
+	//glActiveTexture(GL_TEXTURE0);
+	//glBindTexture(GL_TEXTURE_2D, treeDiffuseTex);
+	//glUniform1i(glGetUniformLocation(shaderProgram, "sunTex"), 0); // Reusing sunTex sampler or create a new one
+
+	// 3. Create the Model Matrix (Position the tree)
+	// Place it at a specific coordinate, e.g., (10, 0, 10)
+	mat4 treeM = translate(mat4(1.0f), vec3(20.0f, 3.0f, 20.0f)) * scale(mat4(1.0f), vec3(0.5f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &treeM[0][0]);
+
+	// 4. Draw
+	treeModel1->bind();
+	treeModel1->draw();
+	// Reset UV scale for other objects
+	glUniform2f(uvScaleLocation, 1.0f, 1.0f);
+
+	/*
 	// <======== LIGHT SOURCE VISUALIZATION ========>
 	//REVERSE THE NORMALS!!!
 	glUniform1f(normDirLocation, -1.0f);
@@ -542,6 +666,37 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	// reset normals!!!!!!!!
 	glUniform1f(normDirLocation, 1.0f);
 
+	// sky 
+	glDisable(GL_CULL_FACE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthMask(GL_FALSE);
+	mat4 skydomeModelMatrix = glm::translate(mat4(1.0f), camera->position) * glm::scale(mat4(1.0f), vec3(30.0f));
+	glUniform1f(normDirLocation, -1.0f); // invert normals
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &skydomeModelMatrix[0][0]); // add to vertex shader as M
+
+	// --- NEW SKY TEXTURE SETUP ---
+	glUniform1i(useTextureLocation, 3); // Set mode to 3 for Skydome logic in shader
+	glActiveTexture(GL_TEXTURE7);       // Activate a new texture unit (7)
+	glBindTexture(GL_TEXTURE_2D, skyTexture); // Bind your new sky texture
+
+	// fragment shader: uniform sampler2D skyTex; // And get its location in C++:
+	// GLuint skyTexLocation = glGetUniformLocation(shaderProgram, "skyTex");
+	// Then set the texture unit:
+	glUniform1i(glGetUniformLocation(shaderProgram, "skyTex"), 7);
+	// -----------------------------
+
+	sphere->bind();
+	sphere->draw();
+	//glEnable(GL_CULL_FACE);
+	//glUniform1f(normDirLocation, 1.0f); // invert normals AGAIN
+	//glUniform1i(useTextureLocation, 1);
+
+	glEnable(GL_CULL_FACE);
+	glDepthFunc(GL_LESS);
+	glDepthMask(GL_TRUE);
+
+
+
 }
 
 void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
@@ -557,11 +712,18 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 	// Terrain model matrix
 	//mat4 modelMatrix = translate(mat4(), vec3(0.0f, -1.0f, -5.0f));
 	//glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &modelMatrix[0][0]);
-	float scaling_factor = 10.0f;
+	float scaling_factor = SCALING_FACTOR;
 	mat4 modelMatrix = translate(mat4(), vec3(0.0f, -1.0f, -5.0f)) * scale(mat4(), vec3(scaling_factor, scaling_factor, scaling_factor));
 	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &modelMatrix[0][0]);
 	terrain->bind();
 	terrain->draw();
+
+	// Use the same model matrix used in the lighting pass
+	mat4 treeM = translate(mat4(1.0f), vec3(10.0f, 0.0f, 10.0f)) * scale(mat4(1.0f), vec3(0.5f));
+	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &treeM[0][0]); 
+
+	treeModel1->bind();
+	treeModel1->draw();
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -623,11 +785,11 @@ void mainLoop() {
 		//mat4 light2_view = light2->viewMatrix; //hw2
 		// Task 3.5
 		// Create the depth buffer
-		depth_pass(light_view, light_proj, depthFBO); //ama einai mesa èá ñéîåé ôá fps,   ,light2_view, light2_proj
+		depth_pass(light_view, light_proj, depthFBO); //ama einai mesa Î¸Î± ÏÎ¹Î¾ÎµÎ¹ Ï„Î± fps,   ,light2_view, light2_proj
 		//depth_pass(light2_view, light2_proj, depthFBO2); //hw2
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		//áí óôáèåñç öùôåéíç ðçãç äåí å÷åé íïçìá íá ôï êáíù êáèå frame
-		// êÜèå äåõôåñüëåðôï
+		//Î±Î½ ÏƒÏ„Î±Î¸ÎµÏÎ· Ï†Ï‰Ï„ÎµÎ¹Î½Î· Ï€Î·Î³Î· Î´ÎµÎ½ ÎµÏ‡ÎµÎ¹ Î½Î¿Î·Î¼Î± Î½Î± Ï„Î¿ ÎºÎ±Î½Ï‰ ÎºÎ±Î¸Îµ frame
+		// ÎºÎ¬Î¸Îµ Î´ÎµÏ…Ï„ÎµÏÏŒÎ»ÎµÏ€Ï„Î¿
 
 		cloudSystem->update(deltaTime);
 
@@ -768,14 +930,14 @@ void initialize() {
 		vec4{ 0.894f, 0.949f, 0.949f, 1 },
 		vec4{ 0.894f, 0.949f, 0.949f, 1 },
 		vec4{ 0.894f, 0.949f, 0.949f, 1 },
-		vec3{ 0, 20, -5 }
+		normalize(vec3(-0.3f, -1.0f, -0.2f))   // SUN DIRECTION
 	);
-	light2 = new Light(window,
+	/*light2 = new Light(window,
 		vec4{ 1, 1, 1, 1 },
 		vec4{ 1, 1, 1, 1 },
 		vec4{ 1, 1, 1, 1 },
 		vec3{ -1, 5, -5 }
-	);
+	);*/
 }
 
 int main(void) {

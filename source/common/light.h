@@ -9,7 +9,7 @@ public:
     glm::mat4 projectionMatrix;
 
     glm::vec3 lightPosition_worldspace;
-
+    glm::vec3 direction;
     glm::vec4 La;
     glm::vec4 Ld;
     glm::vec4 Ls;
@@ -23,7 +23,7 @@ public:
     float farPlane;
 
     float lightSpeed;
-    glm::vec3 direction;
+
 
     // Where the light will look at
     glm::vec3 targetPosition;
@@ -33,7 +33,7 @@ public:
         glm::vec4 init_La,
         glm::vec4 init_Ld,
         glm::vec4 init_Ls,
-        glm::vec3 init_position);
+        glm::vec3 init_direction);
   
     void update();
 

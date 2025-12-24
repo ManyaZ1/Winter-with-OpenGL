@@ -2,11 +2,13 @@
 
 in vec4 vertex_position_cameraspace;
 in vec4 vertex_normal_cameraspace;
-in vec4 light_position_cameraspace;
+in vec3 lightDir_cameraspace;   //dead
+//in vec4 light_position_cameraspace;
 in vec2 vertex_UV;
 in vec4 vertex_position_lightspace;
-in vec4 vertex_position_lightspace2;           
-in vec4 light_position_cameraspace2;
+//in vec4 light_position_cameraspace2;
+//in vec3 lightDir_cameraspace;
+
 in vec2 vertex_UV_tiled;
 uniform sampler2D shadowMapSampler;
 uniform sampler2D skyTex;
@@ -27,6 +29,14 @@ uniform sampler2D bottomTex;    // Optional lake bottom
 uniform sampler2D maskTex;      // White = lake
 uniform float time;             // for water animation
 uniform sampler2D sunTex;
+// treee
+uniform sampler2D trunkTex;   // Slot 0 (Bark JPG)
+uniform sampler2D needleTex;  // Slot 1 (Needle PNG)
+//uniform sampler2D barkSampler;    //  (Slot 0)
+//uniform sampler2D needleSampler;  //  (Slot 1)
+
+
+
 
 // light properties
 struct Light {
@@ -44,6 +54,7 @@ struct Material {
     vec4 Ks;
     float Ns; 
 };
+
 uniform Material mtl;
 in vec3 fragPos_modelspace; //new
 out vec4 fragmentColor;
@@ -55,6 +66,12 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility);
 
 
 void main() {   
+    // SUN (emissive sphere)
+    if (useTexture == 2) {
+        vec4 sunColor = texture(sunTex, vertex_UV);
+        fragmentColor = vec4(sunColor.rgb, 1.0);
+        return;
+    }
     // Mode 4 for simple textured billboards (clouds)
     if (useTexture == 4) {
         //vec4 texColor = texture(sunTex, vertex_UV);
@@ -105,8 +122,8 @@ void main() {
     // --- LIGHT 1  ---
         float shadow1 = ShadowCalculation(vertex_position_lightspace, shadowMapSampler);
         float visibility1 = 1.0f - shadow1;
-    
-        vec3 color1 = calculatePhong(light, light_position_cameraspace, visibility1);
+        //float visibility1 = 1.0;
+        vec3 color1 = calculatePhong(light, vec4(0,0,0,1), visibility1); 
         fragmentColor = vec4(color1, 1.0);
     }
    /* if (useTexture == 3) {        
@@ -136,6 +153,7 @@ void main() {
 
 
 float ShadowCalculation(vec4 fragPositionLightspace,sampler2D depthMap ) {
+
     // Given the position of a fragment in lightspace coordinates
     // We sample the depth buffer to see whether or not the fragment is shadowed
     
@@ -194,22 +212,40 @@ float ShadowCalculation(vec4 fragPositionLightspace,sampler2D depthMap ) {
 }
 
 vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
-   
     vec4 _Ks = mtl.Ks;
     vec4 _Kd = mtl.Kd;
     vec4 _Ka = mtl.Ka;
     float _Ns = mtl.Ns;
-   
-    if (useTexture == 2) {
-        vec3 sunColor = texture(sunTex, 5 * vertex_UV + vec2(time*0.05, time*0.05)).rgb; //πολλαπλασιασμος των uv για να επαναληφθει πολλες φορες η υφή
-        _Kd.rgb = sunColor;
-        _Ka.rgb =  _Kd.rgb;
-        _Ks.rgb = _Kd.rgb; // or keep as is
-        _Ns = 50.0;
-        /*_Ks = vec4(texture(specularColorSampler, vertex_UV).rgb, 1.0);
-        _Kd = vec4(texture(diffuseColorSampler, vertex_UV).rgb, 1.0);
-        _Ka = vec4(0.05 * _Kd.rgb, _Kd.a);
-        _Ns = 10;*/
+    // --- NEW TREE LOGIC (Mode 5) ---
+    if (useTexture == 5) {
+        // Check UV X-position (Left < 0.5 = Trunk, Right > 0.5 = Cones)
+        if (vertex_UV.x < 0.5) {
+            // TRUNK: Bark JPG (Double X to unsquish from Blender move)
+            
+            vec2 barkUV = vec2(vertex_UV.x * 2.0, vertex_UV.y)  * vec2(6.0, 6.0); 
+            _Kd.rgb = texture(trunkTex, barkUV).rgb;
+            }   else {
+            // CONES: Needle PNG (Shift back and double X)
+             
+            vec2 branchUV = vec2((vertex_UV.x - 0.5) * 2.0, vertex_UV.y)* vec2(10.0, 10.0);; //* leafScale; // leafScale = vec2(8.0, 8.0)
+            vec4 texColor = texture(needleTex, branchUV);
+            if (texColor.a < 0.1) discard; 
+            _Kd.rgb = texColor.rgb;
+        }
+    
+        // SNOW ACCUMULATION (Part B)
+        vec3 normal = normalize(vertex_normal_cameraspace.xyz);
+        float snowMask = clamp(dot(normal, vec3(0, 1, 0)), 0.0, 1.0);
+        snowMask = pow(snowMask, 4.0); // Snow only on tops
+    
+        // Mix white color based on a snowAmount uniform (you'll add this next)
+        // _Kd.rgb = mix(_Kd.rgb, vec3(1.0), snowMask * snowAmount);
+
+        _Ka.rgb = 0.1 * _Kd.rgb;
+        _Ks.rgb = vec3(0.1); 
+        _Ns = 5.0;
+
+
     }
     if (useTexture == 1) {
     vec3 terrainColor = mix(
@@ -240,7 +276,9 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     // 2. Diffuse
     vec4 N = normalize(vertex_normal_cameraspace); 
     // CRITICAL CHANGE: Use the specific lightPosCamera passed as argument
-    vec4 L = normalize(lightPosCamera - vertex_position_cameraspace);
+    //vec4 L = normalize(lightPosCamera - vertex_position_cameraspace);
+    vec4 L = normalize(vec4(lightDir_cameraspace, 0.0)); //+ or -?
+
     float cosTheta = clamp(dot(N, L), 0, 1);
     vec4 Id = lightData.Ld * _Kd * cosTheta;
 
@@ -256,5 +294,6 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     vec4 combinedColor = Ia + (Id * visibility) + (Is * visibility);
 
     return combinedColor.rgb;
+    
 }
 
