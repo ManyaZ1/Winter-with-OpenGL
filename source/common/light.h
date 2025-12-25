@@ -38,4 +38,6 @@ public:
     void update();
 
     glm::mat4 lightVP();
+    void fitToCameraFrustum(const glm::mat4& cameraView, const glm::mat4& cameraProj);
+    //void fitToCameraFrustum(const mat4& cameraView, const mat4& cameraProj);
 };

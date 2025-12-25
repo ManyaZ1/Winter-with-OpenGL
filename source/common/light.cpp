@@ -25,6 +25,8 @@ Light::Light(GLFWwindow* window,
     La = init_La;
     Ld = init_Ld;
     Ls = init_Ls;
+    nearPlane = 1.0f;
+    farPlane = 300.0f;
     // Directional light → direction is what matters
     // Treat input as "sun position hint"
     lightPosition_worldspace = init_direction;
@@ -45,9 +47,21 @@ Light::Light(GLFWwindow* window,
 
     //projectionMatrix = ortho(-10.0f, 10.0f, -10.0f, 10.0f, nearPlane, farPlane);
     // Orthographic projection for directional light
+
+    float orthoSize = 80.0f;
+    // <============================Directional light frustum fitting=================================>
+
+    /*Take the camera frustum corners
+
+Transform them into light space
+
+Compute a tight AABB
+
+Build the orthographic projection from that*/
+
     projectionMatrix = ortho(
-        -150.0f, 150.0f,
-        -150.0f, 150.0f,
+        -orthoSize, orthoSize,
+        -orthoSize, orthoSize,
         nearPlane, farPlane
     );
 }
@@ -75,11 +89,76 @@ void Light::update()
     lightPosition_worldspace = sceneCenter - direction * sunDistance;
 
     // --- LIGHT VIEW MATRIX FOR SHADOWS ---
-    glm::vec3 up = vec3(0, 1, 0);
+    //glm::vec3 up = vec3(0, 1, 0);
+    glm::vec3 up = (glm::abs(glm::dot(direction, vec3(0, 1, 0))) > 0.99f) ? vec3(0, 0, 1) : vec3(0, 1, 0);
     viewMatrix = lookAt(lightPosition_worldspace, sceneCenter, up);
     //viewMatrix = lookAt(vec3(0,4,5), sceneCenter, up);//lightPosition_worldspace
 }
 
+
+
+
+mat4 Light::lightVP() {
+    return projectionMatrix * viewMatrix;
+}
+
+void Light::fitToCameraFrustum(const mat4& cameraView, const mat4& cameraProj)
+{
+    // Get the 8 corners of the camera frustum in world space
+	mat4 invCam = inverse(cameraProj * cameraView); // Inverse of view-proj matrix
+
+    vec4 frustumCornersWorldSpace[8];
+    int i = 0;
+    for (int x = 0; x < 2; ++x)
+        for (int y = 0; y < 2; ++y)
+            for (int z = 0; z < 2; ++z)
+            {
+                vec4 ndc(
+                    x ? 1.0f : -1.0f,
+                    y ? 1.0f : -1.0f,
+                    z ? 1.0f : -1.0f,
+                    1.0f
+                );
+
+                vec4 world            = invCam * ndc;
+                world                /= world.w; // Perspective divide
+                frustumCornersWorldSpace[i++] = world;
+            }
+
+    // Transform corners to light view space
+    float minX =  std::numeric_limits<float>::max();
+    float maxX = -std::numeric_limits<float>::max();
+    float minY =  std::numeric_limits<float>::max();
+    float maxY = -std::numeric_limits<float>::max();
+    float minZ =  std::numeric_limits<float>::max();
+    float maxZ = -std::numeric_limits<float>::max();
+
+    for (int j = 0; j < 8; ++j)
+    {
+        vec4 ls = viewMatrix * frustumCornersWorldSpace[j];
+
+        minX = std::min(minX, ls.x);
+        maxX = std::max(maxX, ls.x);
+        minY = std::min(minY, ls.y);
+        maxY = std::max(maxY, ls.y);
+        minZ = std::min(minZ, ls.z);
+        maxZ = std::max(maxZ, ls.z);
+    }
+
+    // Small padding so objects right on the edge don't flicker!
+    const float padding = 8.0f;
+    minX -= padding; maxX += padding;
+    minY -= padding; maxY += padding;
+    minZ -= padding; maxZ += padding;
+
+    // Setting near and far plane affects the detail of the shadow
+    nearPlane = -maxZ;
+    farPlane  = -minZ;
+
+    // Build the ortho projection that tightly fits the camera frustum
+    projectionMatrix = ortho(minX, maxX, minY, maxY, nearPlane, farPlane);
+    return;
+}
 
 /*void Light::update() {
 
@@ -105,11 +184,11 @@ void Light::update()
     if (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS) {
         lightPosition_worldspace -= lightSpeed * vec3(0.0, 1.0, 0.0);
     }
-    
+
 
 
     // We have the direction of the light and the point where the light is looking at
-    // We will use this information to calculate the "up" vector, 
+    // We will use this information to calculate the "up" vector,
     // just like we did with the camera
 
     direction = normalize(targetPosition - lightPosition_worldspace);
@@ -121,7 +200,7 @@ void Light::update()
     float z = direction.z;
 
     // We don't need to calculate the vertical angle
-    
+
     float horizontalAngle;
     if (z > 0.0) horizontalAngle = atan(x/z);
     else if (z < 0.0) horizontalAngle = atan(x/z) + 3.1415f;
@@ -136,17 +215,12 @@ void Light::update()
 
     // Up vector
     vec3 up = cross(right, direction);
-   
+
     viewMatrix = lookAt(
         lightPosition_worldspace,
         targetPosition,
-        up 
+        up
     );
     //
 
 }*/
-
-
-mat4 Light::lightVP() {
-    return projectionMatrix * viewMatrix;
-}

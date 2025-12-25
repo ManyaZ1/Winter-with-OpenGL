@@ -123,7 +123,7 @@ void Camera::update() {
 
     // Task 5.7: construct projection and view matrices
     float aspectRatio = (float)width / (float)height;
-    projectionMatrix = perspective(radians(FoV), aspectRatio, 0.1f, 200.0f);
+    projectionMatrix = perspective(radians(FoV), aspectRatio, 0.1f, 400.0f);
     viewMatrix = lookAt(
         position,
         position + direction,

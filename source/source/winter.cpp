@@ -43,8 +43,8 @@ void free();
 #define W_HEIGHT  900
 #define TITLE "Winter"
 
-#define SHADOW_WIDTH 1024
-#define SHADOW_HEIGHT 1024
+#define SHADOW_WIDTH 2048
+#define SHADOW_HEIGHT 2048
 
 
 
@@ -254,6 +254,7 @@ void createContext() {
 	miniMapProgram = loadShaders("MiniMap.vertexshader", "MiniMap.fragmentshader");
 
 
+	glUseProgram(shaderProgram); //??
 	// NOTE: Don't forget to delete the shader programs on the free() function
 
 	// Get pointers to uniforms
@@ -308,7 +309,7 @@ void createContext() {
 
 	// Loading a model
 	// The terrain object from Gaea is loaded as terrain
-	std::string modelPath = "assets/Mesher_LOD3.obj";
+	std::string modelPath = "assets/Mesher_LOD2.obj";
 	terrain = new Drawable(modelPath);
 
 	// Original objects are still needed for light visualization (model2) or removed entirely
@@ -333,7 +334,8 @@ void createContext() {
 		glUniform3fv(nodePositionsLocation, 4, &defaultNodes[0][0]);
 	}
 	treeModel1 = new Drawable("assets/tree.obj");
-	treeDiffuseTex = loadSOIL("assets/fir.jpg");
+	//treeDiffuseTex = loadSOIL("assets/fir.jpg");
+	treeDiffuseTex = loadSOIL("assets/tree2.jpg");
 	// Task 1.3
 	// Creating a Drawable object using vertices, uvs, normals
 	// In this task we will create a plane on which the shadows will be displayed
@@ -458,7 +460,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
 	glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
 
-	/*// sky 
+	// sky 
 	glDisable(GL_CULL_FACE);
 	glDepthFunc(GL_LEQUAL);
 	glDepthMask(GL_FALSE);
@@ -485,7 +487,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	
 	glEnable(GL_CULL_FACE);
 	glDepthFunc(GL_LESS);
-	glDepthMask(GL_TRUE);*/
+	glDepthMask(GL_TRUE);
 
 	// Upload light(s)
 	uploadLight(*light); //??? giati 2 
@@ -562,15 +564,19 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glBindTexture(GL_TEXTURE_2D, sunTexture);
 	glUniform1i(glGetUniformLocation(shaderProgram, "sunTex"), 6);
 	// Model matrix for sun
-	//mat4 sunModel = translate(mat4(), light->lightPosition_worldspace) * scale(mat4(), vec3(0.8f));
-	//glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &sunModel[0][0]);
-	vec3 sunPos = camera->position - light->direction * 100.0f;
-	mat4 sunModel =
-		translate(mat4(1.0f), sunPos)
-		* scale(mat4(1.0f), vec3(3.0f));
+	// Calculate sun position relative to camera
+	// vec3 sunPos = camera->position - light->direction * 100.0f;
 
+	// USE a fixed world position for the light marker
+	vec3 sunPos = vec3(20.0f, 40.0f, 20.0f);
+
+	// USE sunPos, not light->lightPosition_worldspace!
+	mat4 sunModel = translate(mat4(1.0f), sunPos) * scale(mat4(1.0f), vec3(0.9f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &sunModel[0][0]);
 	sphere->bind();
 	sphere->draw();
+	// Reset normals
+	glUniform1f(normDirLocation, 1.0f);
 	/*light with simple matterial version
 	// Save previous material state if needed (we'll set simple material)
 	glUniform1i(useTextureLocation, 0);
@@ -594,25 +600,6 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 
 	// Optional: stronger tiling for tree
 	glUniform2f(uvScaleLocation, 1.0f, 1.0f);
-	/*// 1. Activate Slot 0 for the Trunk
-	glUniform1i(glGetUniformLocation(shaderProgram, "useTexture"), 5);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, trunkTexture);
-	glUniform1i(glGetUniformLocation(shaderProgram, "trunkTex"), 0);
-
-	// 2. Activate Slot 1 for the Cones
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, needleTexture);
-	glUniform1i(glGetUniformLocation(shaderProgram, "needleTex"), 1);*/
-
-	//// 1. Set the shader mode (e.g., use 4 for alpha-discard logic)
-	//glUniform1i(useTextureLocation, 4); 
-
-	//// 2. Bind the tree texture
-	//glActiveTexture(GL_TEXTURE0);
-	//glBindTexture(GL_TEXTURE_2D, treeDiffuseTex);
-	//glUniform1i(glGetUniformLocation(shaderProgram, "sunTex"), 0); // Reusing sunTex sampler or create a new one
 
 	// 3. Create the Model Matrix (Position the tree)
 	// Place it at a specific coordinate, e.g., (10, 0, 10)
@@ -647,53 +634,37 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 		model2->draw();
 	}
 	*/
-	//// Light 2 sphere
-	//{
-	//	Material lm2{
-	//		vec4(0.05f * light2->Ld.r, 0.05f * light2->Ld.g, 0.05f * light2->Ld.b, 1.0f), // Ka
-	//		light2->Ld, // Kd
-	//		vec4(1.0f, 1.0f, 1.0f, 1.0f), // Ks
-	//		32.0f
-	//	};
-	//	uploadMaterial(lm2);
-
-	//	mat4 lightModel2 = translate(mat4(), light2->lightPosition_worldspace) * scale(mat4(), vec3(0.2f));
-	//	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &lightModel2[0][0]);
-
-	//	model2->bind();
-	//	model2->draw();
-	//}
-	// reset normals!!!!!!!!
+	
 	glUniform1f(normDirLocation, 1.0f);
 
-	// sky 
-	glDisable(GL_CULL_FACE);
-	glDepthFunc(GL_LEQUAL);
-	glDepthMask(GL_FALSE);
-	mat4 skydomeModelMatrix = glm::translate(mat4(1.0f), camera->position) * glm::scale(mat4(1.0f), vec3(30.0f));
-	glUniform1f(normDirLocation, -1.0f); // invert normals
-	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &skydomeModelMatrix[0][0]); // add to vertex shader as M
+	//// sky 
+	//glDisable(GL_CULL_FACE);
+	//glDepthFunc(GL_LEQUAL);
+	//glDepthMask(GL_FALSE);
+	//mat4 skydomeModelMatrix = glm::translate(mat4(1.0f), camera->position) * glm::scale(mat4(1.0f), vec3(30.0f));
+	//glUniform1f(normDirLocation, -1.0f); // invert normals
+	//glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &skydomeModelMatrix[0][0]); // add to vertex shader as M
 
-	// --- NEW SKY TEXTURE SETUP ---
-	glUniform1i(useTextureLocation, 3); // Set mode to 3 for Skydome logic in shader
-	glActiveTexture(GL_TEXTURE7);       // Activate a new texture unit (7)
-	glBindTexture(GL_TEXTURE_2D, skyTexture); // Bind your new sky texture
+	//// --- NEW SKY TEXTURE SETUP ---
+	//glUniform1i(useTextureLocation, 3); // Set mode to 3 for Skydome logic in shader
+	//glActiveTexture(GL_TEXTURE7);       // Activate a new texture unit (7)
+	//glBindTexture(GL_TEXTURE_2D, skyTexture); // Bind your new sky texture
 
-	// fragment shader: uniform sampler2D skyTex; // And get its location in C++:
-	// GLuint skyTexLocation = glGetUniformLocation(shaderProgram, "skyTex");
-	// Then set the texture unit:
-	glUniform1i(glGetUniformLocation(shaderProgram, "skyTex"), 7);
-	// -----------------------------
+	//// fragment shader: uniform sampler2D skyTex; // And get its location in C++:
+	//// GLuint skyTexLocation = glGetUniformLocation(shaderProgram, "skyTex");
+	//// Then set the texture unit:
+	//glUniform1i(glGetUniformLocation(shaderProgram, "skyTex"), 7);
+	//// -----------------------------
 
-	sphere->bind();
-	sphere->draw();
+	//sphere->bind();
+	//sphere->draw();
+	////glEnable(GL_CULL_FACE);
+	////glUniform1f(normDirLocation, 1.0f); // invert normals AGAIN
+	////glUniform1i(useTextureLocation, 1);
+
 	//glEnable(GL_CULL_FACE);
-	//glUniform1f(normDirLocation, 1.0f); // invert normals AGAIN
-	//glUniform1i(useTextureLocation, 1);
-
-	glEnable(GL_CULL_FACE);
-	glDepthFunc(GL_LESS);
-	glDepthMask(GL_TRUE);
+	//glDepthFunc(GL_LESS);
+	//glDepthMask(GL_TRUE);
 
 
 
@@ -719,7 +690,9 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 	terrain->draw();
 
 	// Use the same model matrix used in the lighting pass
-	mat4 treeM = translate(mat4(1.0f), vec3(10.0f, 0.0f, 10.0f)) * scale(mat4(1.0f), vec3(0.5f));
+	//mat4 treeM = translate(mat4(1.0f), vec3(10.0f, 0.0f, 10.0f)) * scale(mat4(1.0f), vec3(0.5f));
+	mat4 treeM = translate(mat4(1.0f), vec3(20.0f, 3.0f, 20.0f))
+		* scale(mat4(1.0f), vec3(0.5f));
 	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &treeM[0][0]); 
 
 	treeModel1->bind();
@@ -747,7 +720,7 @@ void mainLoop() {
 	float lastTime = glfwGetTime();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	light->update();
-	//light2->update();
+	
 	mat4 light_proj = light->projectionMatrix;
 	mat4 light_view = light->viewMatrix;
 	//mat4 light2_proj = light2->projectionMatrix; //hw2
@@ -909,6 +882,7 @@ void initialize() {
 
 	// Enable depth test
 	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_DEPTH_CLAMP);
 	// Accept fragment if it closer to the camera than the former one
 	glDepthFunc(GL_LESS);
 
@@ -927,9 +901,9 @@ void initialize() {
 	// Task 1.1 Creating a light source
 	// Creating a custom light 
 	light = new Light(window,
-		vec4{ 0.894f, 0.949f, 0.949f, 1 },
-		vec4{ 0.894f, 0.949f, 0.949f, 1 },
-		vec4{ 0.894f, 0.949f, 0.949f, 1 },
+		vec4{ 0.7f, 0.75f, 0.85f, 1 },   // La - cool ambient (blueish)
+		vec4{ 0.85f, 0.9f, 0.95f, 1 },   // Ld - cool diffuse (slightly blue-white)
+		vec4{ 0.9f, 0.95f, 1.0f, 1 },    // Ls - cool specular (white-blue)
 		normalize(vec3(-0.3f, -1.0f, -0.2f))   // SUN DIRECTION
 	);
 	/*light2 = new Light(window,
