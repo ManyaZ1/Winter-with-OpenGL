@@ -15,14 +15,15 @@ struct Cloud {
     float alpha;
     float speed;
     float rotationAngle;
+    int textureID; // 0 for first image, 1 for second
 };
 
 class CloudSystem {
 private:
     vector<Cloud> clouds;
     Drawable* cloudQuad;
-    GLuint cloudTexture;
-
+    //GLuint cloudTexture;
+    GLuint cloudTextures[2];
     // Shader uniform locations
     GLuint modelMatrixLocation;
     GLuint useTextureLocation;

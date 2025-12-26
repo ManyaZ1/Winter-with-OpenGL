@@ -2,11 +2,11 @@
 #include <common/texture.h>
 #include <iostream>
 //#include <common/model.h>
-CloudSystem::CloudSystem() : cloudQuad(nullptr), cloudTexture(0) {}
+//CloudSystem::CloudSystem() : cloudQuad(nullptr), cloudTexture(0) {}
 
-CloudSystem::~CloudSystem() {
-    if (cloudQuad) delete cloudQuad;
-    if (cloudTexture) glDeleteTextures(1, &cloudTexture);
+CloudSystem::CloudSystem() : cloudQuad(nullptr) {
+    cloudTextures[0] = 0;
+    cloudTextures[1] = 0;
 }
 
 void CloudSystem::initialize(GLuint shaderProgram) {
@@ -24,12 +24,22 @@ void CloudSystem::initialize(GLuint shaderProgram) {
     cloudQuad = new Drawable(quadVerts, quadUVs);
 
     // Load cloud texture
-    cloudTexture = loadSOIL("assets/cloud2.png");
-    glBindTexture(GL_TEXTURE_2D, cloudTexture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    //cloudTexture = loadSOIL("assets/cloud2.png"); //cloud more fluffy cloud2 more angry looking  
+    cloudTextures[0] = loadSOIL("assets/cloud.png"); 
+    cloudTextures[1] = loadSOIL("assets/cloud2.png");
+    // Set parameters for both (repeat for cloudTextures[1])
+    for (int i = 0; i < 2; i++) {
+        glBindTexture(GL_TEXTURE_2D, cloudTextures[i]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    }
+    //glBindTexture(GL_TEXTURE_2D, cloudTexture);
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     uvRotationLocation = glGetUniformLocation(shaderProgram, "uvRotationAngle");
     // Get shader uniform locations
     modelMatrixLocation = glGetUniformLocation(shaderProgram, "M");
@@ -46,9 +56,13 @@ void CloudSystem::addCloud(vec3 position, float size) {
     cloud.alpha = 0.5f;
     cloud.speed = 0.5f + (rand() % 10) / 10.0f; // Random speed 0.5-1.5
     // limit between 210 and 230
-	float randomDegree = (float)(rand() % 20) - 10.0f; //+-10 degrees
-    cloud.rotationAngle = (float)(220 +randomDegree);
+	//float randomDegree = (float)(rand() % 20) - 10.0f; //+-10 degrees
+    //cloud.rotationAngle = (float)(220 +randomDegree);
+    cloud.rotationAngle = 3.14159f ;
     //cloud.rotationAngle = (float)(rand() % 360) * 3.14159f / 180.0f;
+	cloud.textureID = (rand() % 3) % 2; //66% is 1 or 2 and 33% it is 0. so 1%2=1 2%2=0 and 0%2=0 //Randomly choose 0 or 1 but 0 with 66% chance
+
+    // or cloud.textureID = (rand() % 100 < 70) ? 0 : 1;
     clouds.push_back(cloud);
 }
 
@@ -63,36 +77,32 @@ void CloudSystem::update(float deltaTime) {
         }
     }
 }
-
 void CloudSystem::render(mat4 viewMatrix, mat4 projectionMatrix) {
     if (clouds.empty()) return;
 
-    // Enable blending for transparency
     glEnable(GL_BLEND);
-    //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDepthMask(GL_FALSE);
 
-    // Set texture mode and bind cloud texture
     glUniform1i(useTextureLocation, 4);
-    glActiveTexture(GL_TEXTURE6);
-    glBindTexture(GL_TEXTURE_2D, cloudTexture);
-    glUniform1i(textureLocation, 6);
 
-    // Extract camera orientation for billboarding
     vec3 cameraRight = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
     vec3 cameraUp = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
     vec3 cameraForward = cross(cameraRight, cameraUp);
 
-    // Render each cloud
     for (const auto& cloud : clouds) {
-        // Build billboard matrix
         mat4 billboard = mat4(1.0f);
         billboard[0] = vec4(cameraRight * cloud.size, 0);
         billboard[1] = vec4(cameraUp * cloud.size, 0);
         billboard[2] = vec4(cameraForward * cloud.size, 0);
         billboard[3] = vec4(cloud.position, 1);
 
+        // Bind the specific texture assigned to this cloud
+        glActiveTexture(GL_TEXTURE6);
+        glBindTexture(GL_TEXTURE_2D, cloudTextures[cloud.textureID]);
+        glUniform1i(textureLocation, 6);
+
+        // Set uniforms and draw
         glUniform1f(uvRotationLocation, cloud.rotationAngle);
         glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &billboard[0][0]);
 
@@ -100,7 +110,62 @@ void CloudSystem::render(mat4 viewMatrix, mat4 projectionMatrix) {
         cloudQuad->draw();
     }
 
-    // Restore OpenGL state
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
+}
+//
+//void CloudSystem::render(mat4 viewMatrix, mat4 projectionMatrix) {
+//    if (clouds.empty()) return;
+//
+//    // Enable blending for transparency
+//    glEnable(GL_BLEND);
+//    //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+//    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+//    glDepthMask(GL_FALSE);
+//
+//    // Set texture mode and bind cloud texture
+//    glUniform1i(useTextureLocation, 4);
+//    //glActiveTexture(GL_TEXTURE6);
+//    //glBindTexture(GL_TEXTURE_2D, cloudTexture);
+//    //glUniform1i(textureLocation, 6);
+//
+//    // Extract camera orientation for billboarding
+//    vec3 cameraRight = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+//    vec3 cameraUp = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+//    vec3 cameraForward = cross(cameraRight, cameraUp);
+//
+//    // Render each cloud
+//    for (const auto& cloud : clouds) {
+//        // Build billboard matrix
+//        mat4 billboard = mat4(1.0f);
+//        billboard[0] = vec4(cameraRight * cloud.size, 0);
+//        billboard[1] = vec4(cameraUp * cloud.size, 0);
+//        billboard[2] = vec4(cameraForward * cloud.size, 0);
+//        billboard[3] = vec4(cloud.position, 1);
+//
+//        glUniform1f(uvRotationLocation, cloud.rotationAngle);
+//        glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &billboard[0][0]);
+//
+//        glActiveTexture(GL_TEXTURE6);
+//        glBindTexture(GL_TEXTURE_2D, cloudTextures[cloud.textureID]);
+//        glUniform1i(textureLocation, 6);
+//
+//        glUniform1f(uvRotationLocation, cloud.rotationAngle);
+//        glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &billboard[0][0]);
+//
+//        cloudQuad->bind();
+//        cloudQuad->draw();
+//    }
+//
+//    // Restore OpenGL state
+//    glDepthMask(GL_TRUE);
+//    glDisable(GL_BLEND);
+//}
+
+CloudSystem::~CloudSystem() {
+    if (cloudQuad) {
+        delete cloudQuad;
+    }
+    // Delete the array of 2 textures
+    glDeleteTextures(2, cloudTextures);
 }

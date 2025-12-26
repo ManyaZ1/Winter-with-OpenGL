@@ -572,7 +572,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	// vec3 sunPos = camera->position - light->direction * 100.0f;
 
 	// USE a fixed world position for the light marker
-	vec3 sunPos = vec3(20.0f, 40.0f, 20.0f);
+	vec3 sunPos = vec3(35.0f, 50.0f, 20.0f);
 
 	// USE sunPos, not light->lightPosition_worldspace!
 	mat4 sunModel = translate(mat4(1.0f), sunPos) * scale(mat4(1.0f), vec3(0.9f));
