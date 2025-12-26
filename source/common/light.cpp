@@ -105,7 +105,7 @@ mat4 Light::lightVP() {
 void Light::fitToCameraFrustum(const mat4& cameraView, const mat4& cameraProj)
 {
     // Get the 8 corners of the camera frustum in world space
-	mat4 invCam = inverse(cameraProj * cameraView); // Inverse of view-proj matrix
+    mat4 invCam = inverse(cameraProj * cameraView);
 
     vec4 frustumCornersWorldSpace[8];
     int i = 0;
@@ -120,17 +120,32 @@ void Light::fitToCameraFrustum(const mat4& cameraView, const mat4& cameraProj)
                     1.0f
                 );
 
-                vec4 world            = invCam * ndc;
-                world                /= world.w; // Perspective divide
+                vec4 world = invCam * ndc;
+                world /= world.w;
                 frustumCornersWorldSpace[i++] = world;
             }
 
+    // Calculate frustum center in world space
+    vec3 frustumCenter(0.0f);
+    for (int j = 0; j < 8; ++j)
+    {
+        frustumCenter += vec3(frustumCornersWorldSpace[j]);
+    }
+    frustumCenter /= 8.0f;
+
+    // Update light view to look at frustum center
+    glm::vec3 up = (glm::abs(glm::dot(direction, vec3(0, 1, 0))) > 0.99f) ? vec3(0, 0, 1) : vec3(0, 1, 0);
+
+    // Position light far from frustum center along direction
+    lightPosition_worldspace = frustumCenter - direction * 150.0f;
+    viewMatrix = lookAt(lightPosition_worldspace, frustumCenter, up);
+
     // Transform corners to light view space
-    float minX =  std::numeric_limits<float>::max();
+    float minX = std::numeric_limits<float>::max();
     float maxX = -std::numeric_limits<float>::max();
-    float minY =  std::numeric_limits<float>::max();
+    float minY = std::numeric_limits<float>::max();
     float maxY = -std::numeric_limits<float>::max();
-    float minZ =  std::numeric_limits<float>::max();
+    float minZ = std::numeric_limits<float>::max();
     float maxZ = -std::numeric_limits<float>::max();
 
     for (int j = 0; j < 8; ++j)
@@ -145,20 +160,82 @@ void Light::fitToCameraFrustum(const mat4& cameraView, const mat4& cameraProj)
         maxZ = std::max(maxZ, ls.z);
     }
 
-    // Small padding so objects right on the edge don't flicker!
-    const float padding = 8.0f;
-    minX -= padding; maxX += padding;
-    minY -= padding; maxY += padding;
-    minZ -= padding; maxZ += padding;
+    // Generous padding
+    const float padding = 30.0f;
+    minX -= padding;
+    maxX += padding;
+    minY -= padding; 
+    maxY += padding;
+    minZ -= padding * 2.0f;  // More padding behind camera
+    maxZ += padding;
 
-    // Setting near and far plane affects the detail of the shadow
     nearPlane = -maxZ;
-    farPlane  = -minZ;
+    farPlane = -minZ;
 
-    // Build the ortho projection that tightly fits the camera frustum
     projectionMatrix = ortho(minX, maxX, minY, maxY, nearPlane, farPlane);
-    return;
 }
+
+//void Light::fitToCameraFrustum(const mat4& cameraView, const mat4& cameraProj)
+//{
+//    // Get the 8 corners of the camera frustum in world space
+//	mat4 invCam = inverse(cameraProj * cameraView); // Inverse of view-proj matrix
+//
+//    vec4 frustumCornersWorldSpace[8];
+//    int i = 0;
+//    for (int x = 0; x < 2; ++x)
+//        for (int y = 0; y < 2; ++y)
+//            for (int z = 0; z < 2; ++z)
+//            {
+//                vec4 ndc(
+//                    x ? 1.0f : -1.0f,
+//                    y ? 1.0f : -1.0f,
+//                    z ? 1.0f : -1.0f,
+//                    1.0f
+//                );
+//
+//                vec4 world            = invCam * ndc;
+//                world                /= world.w; // Perspective divide
+//                frustumCornersWorldSpace[i++] = world;
+//            }
+//
+//    // Transform corners to light view space
+//    float minX =  std::numeric_limits<float>::max();
+//    float maxX = -std::numeric_limits<float>::max();
+//    float minY =  std::numeric_limits<float>::max();
+//    float maxY = -std::numeric_limits<float>::max();
+//    float minZ =  std::numeric_limits<float>::max();
+//    float maxZ = -std::numeric_limits<float>::max();
+//
+//    for (int j = 0; j < 8; ++j)
+//    {
+//        vec4 ls = viewMatrix * frustumCornersWorldSpace[j];
+//
+//        minX = std::min(minX, ls.x);
+//        maxX = std::max(maxX, ls.x);
+//        minY = std::min(minY, ls.y);
+//        maxY = std::max(maxY, ls.y);
+//        minZ = std::min(minZ, ls.z);
+//        maxZ = std::max(maxZ, ls.z);
+//    }
+//
+//    // Small padding so objects right on the edge don't flicker!
+//    const float padding = 20.0f;
+//    minX -= padding; maxX += padding;
+//    minY -= padding; maxY += padding;
+//    const float zMult = 3.0f;  // Was 10.0f - reduce this!
+//    minZ -= padding;  // Add padding to near plane too
+//    maxZ += padding;
+//
+//    minZ *= zMult;
+//    maxZ *= zMult;
+//    // Setting near and far plane affects the detail of the shadow
+//    nearPlane = -maxZ;
+//    farPlane  = -minZ;
+//
+//    // Build the ortho projection that tightly fits the camera frustum
+//    projectionMatrix = ortho(minX, maxX, minY, maxY, nearPlane, farPlane);
+//    return;
+//}
 
 /*void Light::update() {
 

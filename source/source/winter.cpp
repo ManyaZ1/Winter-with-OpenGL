@@ -43,8 +43,8 @@ void free();
 #define W_HEIGHT  900
 #define TITLE "Winter"
 
-#define SHADOW_WIDTH 2048
-#define SHADOW_HEIGHT 2048
+#define SHADOW_WIDTH 4096//2048    8192
+#define SHADOW_HEIGHT 4096//2048  8192
 
 
 
@@ -77,9 +77,13 @@ GLuint lightDirectionLocation;
 Drawable* quad;
 
 // tree
-Drawable* treeModel1;
+Drawable* treeModel1; 
+Drawable* bushModel;
 GLuint treeDiffuseTex;
-
+GLuint bushTexture1;
+GLuint bushTexture2;
+GLuint bushTexture3;
+GLuint chrysTexture;
 
 
 
@@ -90,17 +94,16 @@ GLuint projectionMatrixLocation;
 GLuint modelMatrixLocation;
 GLuint KaLocation, KdLocation, KsLocation, NsLocation;
 GLuint LaLocation, LdLocation, LsLocation;
-GLuint LaLocation2, LdLocation2, LsLocation2;
+
 GLuint lightPositionLocation;
-GLuint lightPositionLocation2;
+
 GLuint lightPowerLocation;
 GLuint diffuseColorSampler;
 GLuint specularColorSampler;
 GLuint useTextureLocation;
 GLuint depthMapSampler;
-GLuint depthMapSampler2;
 GLuint lightVPLocation;
-GLuint light2VPLocation;
+
 
 
 //scale textures
@@ -165,19 +168,6 @@ void uploadLight(const Light& light) {
 	/*glUniform3f(lightPositionLocation, light.lightPosition_worldspace.x,
 		light.lightPosition_worldspace.y, light.lightPosition_worldspace.z);*/
 }
-void uploadLight(const Light& light, const Light& light2) {
-	glUniform4f(LaLocation, light.La.r, light.La.g, light.La.b, light.La.a);
-	glUniform4f(LdLocation, light.Ld.r, light.Ld.g, light.Ld.b, light.Ld.a);
-	glUniform4f(LsLocation, light.Ls.r, light.Ls.g, light.Ls.b, light.Ls.a);
-	glUniform3f(lightPositionLocation, light.lightPosition_worldspace.x,
-		light.lightPosition_worldspace.y, light.lightPosition_worldspace.z);
-	//upload for light 2
-	glUniform4f(LaLocation2, light2.La.r, light2.La.g, light2.La.b, light2.La.a);
-	glUniform4f(LdLocation2, light2.Ld.r, light2.Ld.g, light2.Ld.b, light2.Ld.a);
-	glUniform4f(LsLocation2, light2.Ls.r, light2.Ls.g, light2.Ls.b, light2.Ls.a);
-	glUniform3f(lightPositionLocation2, light2.lightPosition_worldspace.x,
-		light2.lightPosition_worldspace.y, light2.lightPosition_worldspace.z);
-}
 
 
 // Creating a function to upload the material parameters of a model to the shader program
@@ -202,8 +192,8 @@ void createDepthFBOAndTexture(GLuint& fboID, GLuint& textureID) {
 		GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
 
 	// Set texture parameters
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);//GL_NEAREST
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	// Task 4.5: Wrapping to GL_CLAMP_TO_BORDER with a border color
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
@@ -280,9 +270,7 @@ void createContext() {
 	specularColorSampler = glGetUniformLocation(shaderProgram, "specularColorSampler");
 	scaling_factor_location= glGetUniformLocation(shaderProgram, "scaling_factor");
 	uvScaleLocation = glGetUniformLocation(shaderProgram, "uvScale"); // <-- new
-	LaLocation2 = glGetUniformLocation(shaderProgram, "light2.La");
-	LdLocation2 = glGetUniformLocation(shaderProgram, "light2.Ld");
-	LsLocation2 = glGetUniformLocation(shaderProgram, "light2.Ls");
+
 	
 	//hw 4
 	normDirLocation = glGetUniformLocation(shaderProgram, "normDir");
@@ -292,8 +280,7 @@ void createContext() {
 	// locations for shadow rendering
 	depthMapSampler = glGetUniformLocation(shaderProgram, "shadowMapSampler");
 	lightVPLocation = glGetUniformLocation(shaderProgram, "lightVP");
-	light2VPLocation = glGetUniformLocation(shaderProgram, "light2VP");
-	depthMapSampler2 = glGetUniformLocation(shaderProgram, "shadowMapSampler2");
+
 	// --- depthProgram ---
 	shadowViewProjectionLocation = glGetUniformLocation(depthProgram, "VP");
 	shadowModelLocation = glGetUniformLocation(depthProgram, "M");
@@ -309,18 +296,19 @@ void createContext() {
 
 	// Loading a model
 	// The terrain object from Gaea is loaded as terrain
-	std::string modelPath = "assets/Mesher_LOD2.obj";
+	std::string modelPath = "assets/Mesher_LOD3.obj";
 	terrain = new Drawable(modelPath);
 
-	// Original objects are still needed for light visualization (model2) or removed entirely
-	//model1 = new Drawable("suzanne.obj");
-	// The textures for model1 are NOT loaded, as requested.
-	// modelDiffuseTexture = loadSOIL("suzanne_diffuse.bmp");
-	// modelSpecularTexture = loadSOIL("suzanne_specular.bmp");
+	// Load suzanne model with textures for shadow demonstration
+	model1 = new Drawable("suzanne.obj");
+	modelDiffuseTexture = loadSOIL("suzanne_diffuse.bmp");
+	modelSpecularTexture = loadSOIL("suzanne_specular.bmp");
 
 	// model2 (sphere) is used for light visualization, keep loading it
 	sphere = new Drawable("earth.obj");
 
+	// <===============TRRRRREEEEEEEEEE========================>
+	// 
 	// Load tree models
 	// After glUseProgram(shaderProgram);
 	GLuint nodePositionsLocation = glGetUniformLocation(shaderProgram, "nodePositions");
@@ -336,9 +324,25 @@ void createContext() {
 	treeModel1 = new Drawable("assets/tree.obj");
 	//treeDiffuseTex = loadSOIL("assets/fir.jpg");
 	treeDiffuseTex = loadSOIL("assets/tree2.jpg");
-	// Task 1.3
-	// Creating a Drawable object using vertices, uvs, normals
-	// In this task we will create a plane on which the shadows will be displayed
+	 
+	//BUSH
+	bushModel = new Drawable("assets/bush.obj");
+	bushTexture1 = loadSOIL("assets/bush1.png");
+	glBindTexture(GL_TEXTURE_2D, bushTexture1);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	bushTexture2 = loadSOIL("assets/bush2.png");
+	glBindTexture(GL_TEXTURE_2D, bushTexture2);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	bushTexture3 = loadSOIL("assets/bush3.png");
+	glBindTexture(GL_TEXTURE_2D, bushTexture3);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	chrysTexture = loadSOIL("assets/chrys.jpg");
+	glBindTexture(GL_TEXTURE_2D, chrysTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
 	/* CLOUD SYSTEM */
 	// Initialize cloud system
@@ -409,7 +413,7 @@ void createContext() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-	skyTexture = loadSOIL("assets/sky5.jpg");
+	skyTexture = loadSOIL("assets/sky5.jpg"); //sky5.jpg
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
@@ -595,7 +599,9 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 
 	// Needles → texture unit 1
 	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, needleTexture);
+	//glBindTexture(GL_TEXTURE_2D, needleTexture);
+	glBindTexture(GL_TEXTURE_2D, chrysTexture);  //chrysantemum tezture looks good on tree!
+	//glUniform1i(glGetUniformLocation(shaderProgram, "needleTex"), 1);
 	glUniform1i(glGetUniformLocation(shaderProgram, "needleTex"), 1);
 
 	// Optional: stronger tiling for tree
@@ -612,62 +618,45 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	// Reset UV scale for other objects
 	glUniform2f(uvScaleLocation, 1.0f, 1.0f);
 
-	/*
-	// <======== LIGHT SOURCE VISUALIZATION ========>
-	//REVERSE THE NORMALS!!!
-	glUniform1f(normDirLocation, -1.0f);
-	// Light 1 sphere
-	{
-		// small emissive-looking material based on light color
-		Material lm1{
-			vec4(0.05f * light->Ld.r, 0.05f * light->Ld.g, 0.05f * light->Ld.b, 1.0f), // Ka
-			light->Ld, // Kd
-			vec4(1.0f, 1.0f, 1.0f, 1.0f), // Ks
-			32.0f
-		};
-		uploadMaterial(lm1);
+	/*==================== DRAW BUSH ====================*/
+// 1. Set the texture (using bushTexture1 as an example)
+	glUniform1i(useTextureLocation, 6); // bush texture mode
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, bushTexture2);
+	glUniform1i(diffuseColorSampler, 0);
 
-		mat4 lightModel = translate(mat4(), light->lightPosition_worldspace) * scale(mat4(), vec3(0.2f));
-		glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &lightModel[0][0]);
+	// 2. Position the bush next to the tree
+	// The tree is at (20, 3, 20). We place the bush slightly to the side at (22, 3, 20).
+	mat4 bushM = translate(mat4(1.0f), vec3(22.0f, 3.0f, 20.0f)) * scale(mat4(1.0f), vec3(0.015f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &bushM[0][0]);
 
-		model2->bind(); // reuse the loaded sphere (earth.obj)
-		model2->draw();
-	}
-	*/
+	// 3. Draw
+	bushModel->bind();
+	bushModel->draw();
+
+	/* <======== SUZANNE MODEL ========> */
+	// Use textures for suzanne
+	glUniform1i(useTextureLocation, 1);
+	glUniform1f(normDirLocation, 1.0f);
+	
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, modelDiffuseTexture);
+	glUniform1i(diffuseColorSampler, 0);
+	
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, modelSpecularTexture);
+	glUniform1i(specularColorSampler, 1);
+	
+	// Position suzanne in the scene
+	mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &suzanneM[0][0]);
+	
+	model1->bind();
+	model1->draw();
 	
 	glUniform1f(normDirLocation, 1.0f);
 
-	//// sky 
-	//glDisable(GL_CULL_FACE);
-	//glDepthFunc(GL_LEQUAL);
-	//glDepthMask(GL_FALSE);
-	//mat4 skydomeModelMatrix = glm::translate(mat4(1.0f), camera->position) * glm::scale(mat4(1.0f), vec3(30.0f));
-	//glUniform1f(normDirLocation, -1.0f); // invert normals
-	//glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &skydomeModelMatrix[0][0]); // add to vertex shader as M
-
-	//// --- NEW SKY TEXTURE SETUP ---
-	//glUniform1i(useTextureLocation, 3); // Set mode to 3 for Skydome logic in shader
-	//glActiveTexture(GL_TEXTURE7);       // Activate a new texture unit (7)
-	//glBindTexture(GL_TEXTURE_2D, skyTexture); // Bind your new sky texture
-
-	//// fragment shader: uniform sampler2D skyTex; // And get its location in C++:
-	//// GLuint skyTexLocation = glGetUniformLocation(shaderProgram, "skyTex");
-	//// Then set the texture unit:
-	//glUniform1i(glGetUniformLocation(shaderProgram, "skyTex"), 7);
-	//// -----------------------------
-
-	//sphere->bind();
-	//sphere->draw();
-	////glEnable(GL_CULL_FACE);
-	////glUniform1f(normDirLocation, 1.0f); // invert normals AGAIN
-	////glUniform1i(useTextureLocation, 1);
-
-	//glEnable(GL_CULL_FACE);
-	//glDepthFunc(GL_LESS);
-	//glDepthMask(GL_TRUE);
-
-
-
+	
 }
 
 void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
@@ -697,6 +686,13 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 
 	treeModel1->bind();
 	treeModel1->draw();
+
+	// Render suzanne in shadow pass
+	mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
+	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &suzanneM[0][0]);
+	
+	model1->bind();
+	model1->draw();
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -739,7 +735,7 @@ void mainLoop() {
 		float currentTime = glfwGetTime();
 		float deltaTime = currentTime - lastTime;
 		lastTime = currentTime;
-		if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
+		/*if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
 			Light::chosen_light_id = 1;
 		}
 		if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
@@ -750,20 +746,18 @@ void mainLoop() {
 		}
 		else if (Light::chosen_light_id == 2) {
 			light2->update();
-		}
+		}*/
 
-		mat4 light_proj = light->projectionMatrix;
-		mat4 light_view = light->viewMatrix;
+		//mat4 light_proj = light->projectionMatrix;
+		//mat4 light_view = light->viewMatrix;
 		//mat4 light2_proj = light2->projectionMatrix; //hw2
 		//mat4 light2_view = light2->viewMatrix; //hw2
 		// Task 3.5
 		// Create the depth buffer
-		depth_pass(light_view, light_proj, depthFBO); //ama einai mesa θα ριξει τα fps,   ,light2_view, light2_proj
+		//depth_pass(light_view, light_proj, depthFBO); //ama einai mesa θα ριξει τα fps,   ,light2_view, light2_proj
 		//depth_pass(light2_view, light2_proj, depthFBO2); //hw2
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		//αν σταθερη φωτεινη πηγη δεν εχει νοημα να το κανω καθε frame
-		// κάθε δευτερόλεπτο
-
+		
+		light->update();
 		cloudSystem->update(deltaTime);
 
 		// Getting camera information
@@ -771,9 +765,18 @@ void mainLoop() {
 		mat4 projectionMatrix = camera->projectionMatrix;
 		mat4 viewMatrix = camera->viewMatrix;
 
+		// frustum fit
+		light->fitToCameraFrustum(viewMatrix, projectionMatrix);
 
+		// Re-fetch updated light matrices
+		mat4 light_proj = light->projectionMatrix;
+		mat4 light_view = light->viewMatrix;
 
-		//lighting_pass(viewMatrix, projectionMatrix);
+		// Now render shadow map
+		depth_pass(light_view, light_proj, depthFBO);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		//αν σταθερη φωτεινη πηγη δεν εχει νοημα να το κανω καθε frame
+		// κάθε δευτερόλεπτο
 
 		// Task 1.5
 		// Rendering the scene from light's perspective when F1 is pressed
