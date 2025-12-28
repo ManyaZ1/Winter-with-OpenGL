@@ -285,7 +285,104 @@ void Forest::generate() {
 
     uploadToGPU();
 }
+
+void Forest::setupInstancing() {
+    if (!treeModel || modelMatrices.empty()) return;
+
+    // 1. Link the instance count to the drawable
+    treeModel->instanceCount = (int)modelMatrices.size();
+
+    // 2. Bind the tree VAO to record settings
+    treeModel->bind();
+
+    // Clean up old buffers if they exist
+    if (instanceVBO != 0) glDeleteBuffers(1, &instanceVBO);
+    if (textureVBO != 0) glDeleteBuffers(1, &textureVBO);
+
+    // 3. Upload Model Matrices (Attributes 4-7)
+    glGenBuffers(1, &instanceVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+    glBufferData(GL_ARRAY_BUFFER, modelMatrices.size() * sizeof(glm::mat4), modelMatrices.data(), GL_STATIC_DRAW);
+
+    for (int i = 0; i < 4; i++) {
+        glEnableVertexAttribArray(4 + i);
+        glVertexAttribPointer(4 + i, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(sizeof(float) * i * 4));
+        glVertexAttribDivisor(4 + i, 1);
+    }
+
+    // 4. Upload Texture Indices (Attribute 8)
+    glGenBuffers(1, &textureVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, textureVBO);
+    glBufferData(GL_ARRAY_BUFFER, textureIndices.size() * sizeof(int), textureIndices.data(), GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(8);
+    glVertexAttribIPointer(8, 1, GL_INT, sizeof(int), (void*)0);
+    glVertexAttribDivisor(8, 1);
+
+    // 5. CRITICAL: RESET STATE
+    // Unbind the buffer first
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    // Disable these attributes in the VAO so they don't leak 
+    // to standard draws. They will be re-enabled in Forest::draw()
+    for (int i = 4; i <= 8; i++) {
+        glDisableVertexAttribArray(i);
+    }
+
+    // 6. Unbind the VAO last to close the state recording
+    glBindVertexArray(0);
+}
+void Forest::uploadToGPU() {
+    setupInstancing();
+}
+void Forest::draw() {
+    if (!treeModel || modelMatrices.empty()) return;
+
+    treeModel->bind();
+
+    // Re-enable instancing slots specifically for the forest draw
+    for (int i = 4; i <= 8; i++) {
+        glEnableVertexAttribArray(i);
+        glVertexAttribDivisor(i, 1); // Ensure divisor is 1 for instancing
+    }
+
+    glDrawElementsInstanced(
+        GL_TRIANGLES,
+        (GLsizei)treeModel->indices.size(),
+        GL_UNSIGNED_INT,
+        0,
+        (GLsizei)modelMatrices.size()
+    );
+
+    // Clean up immediately after drawing to prevent leakage
+    for (int i = 4; i <= 8; i++) {
+        glDisableVertexAttribArray(i);
+        glVertexAttribDivisor(i, 0);
+    }
+
+    glBindVertexArray(0);
+}
+//void Forest::draw() {
+//    if (!treeModel || modelMatrices.empty()) {
+//        return;
+//    }
 //
+//    // Bind the tree model's VAO
+//    treeModel->bind();
+//
+//    // Draw all instances
+//    glDrawElementsInstanced(
+//        GL_TRIANGLES,
+//        (GLsizei)treeModel->indices.size(), // Use the indices vector size
+//        GL_UNSIGNED_INT,
+//        0,
+//        (GLsizei)modelMatrices.size()
+//    );
+//    // FIX: Disable the attributes so they don't leak to other models
+//    for (int i = 0; i < 5; i++) { // Locations 4, 5, 6, 7, and 8
+//        glDisableVertexAttribArray(4 + i);
+//    }
+//}
 //void Forest::setupInstancing() {
 //    if (!treeModel) {
 //        std::cerr << "Error: treeModel is null!" << std::endl;
@@ -433,97 +530,75 @@ void Forest::generate() {
 //    //}
 //
 //}
-void Forest::setupInstancing() {
-    if (!treeModel || modelMatrices.empty()) {
-        std::cerr << "Error: treeModel is null or no instances to setup!" << std::endl;
-        return;
-    }
-
-    // 1. Bind the tree model's VAO to record these settings
-    treeModel->bind();
-
-    // Clean up old buffers if they exist (prevents memory leaks on re-generation)
-    if (instanceVBO != 0) glDeleteBuffers(1, &instanceVBO);
-    if (textureVBO != 0) glDeleteBuffers(1, &textureVBO);
-
-    // 2. Setup Model Matrices (Attributes 4, 5, 6, 7)
-    glGenBuffers(1, &instanceVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-    glBufferData(
-        GL_ARRAY_BUFFER,
-        modelMatrices.size() * sizeof(glm::mat4),
-        modelMatrices.data(),
-        GL_STATIC_DRAW
-    );
-
-    // A mat4 takes up 4 attribute slots
-    for (int i = 0; i < 4; i++) {
-        GLuint loc = 4 + i;
-        glEnableVertexAttribArray(loc);
-        glVertexAttribPointer(
-            loc,
-            4,
-            GL_FLOAT,
-            GL_FALSE,
-            sizeof(glm::mat4),
-            (void*)(sizeof(float) * i * 4)
-        );
-        glVertexAttribDivisor(loc, 1); // Advance once per instance, not per vertex
-    }
-
-    // 3. Setup Texture Indices (Attribute 8)
-    glGenBuffers(1, &textureVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, textureVBO);
-    glBufferData(
-        GL_ARRAY_BUFFER,
-        textureIndices.size() * sizeof(int),
-        textureIndices.data(),
-        GL_STATIC_DRAW
-    );
-
-    glEnableVertexAttribArray(8);
-    glVertexAttribIPointer(8, 1, GL_INT, sizeof(int), (void*)0);
-    glVertexAttribDivisor(8, 1); // Advance once per instance
-
-    // 4. CLEANUP (The order here is vital)
-
-    // Unbind the buffer first
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    // Disable the attributes specifically for this VAO so they don't 
-    // stay active when you use the VAO for other things (like shadow passes)
-    // They will be re-enabled inside your Forest::draw() call.
-    for (int i = 4; i <= 8; i++) {
-        glDisableVertexAttribArray(i);
-    }
-
-    // Finally, unbind the VAO
-    glBindVertexArray(0);
-
-    std::cout << "Instancing successfully set up for " << modelMatrices.size() << " trees." << std::endl;
-}
-void Forest::uploadToGPU() {
-    setupInstancing();
-}
-
-void Forest::draw() {
-    if (!treeModel || modelMatrices.empty()) {
-        return;
-    }
-
-    // Bind the tree model's VAO
-    treeModel->bind();
-
-    // Draw all instances
-    glDrawElementsInstanced(
-        GL_TRIANGLES,
-        (GLsizei)treeModel->indices.size(), // Use the indices vector size
-        GL_UNSIGNED_INT,
-        0,
-        (GLsizei)modelMatrices.size()
-    );
-    // FIX: Disable the attributes so they don't leak to other models
-    for (int i = 0; i < 5; i++) { // Locations 4, 5, 6, 7, and 8
-        glDisableVertexAttribArray(4 + i);
-    }
-}
+//void Forest::setupInstancing() {
+//    if (!treeModel || modelMatrices.empty()) {
+//        std::cerr << "Error: treeModel is null or no instances to setup!" << std::endl;
+//        return;
+//    }
+//
+//    // 1. Bind the tree model's VAO to record these settings
+//    //treeModel->instanceCount = (int)modelMatrices.size();
+//    treeModel->instanceCount = targetInstanceCount;  //?
+//    treeModel->bind();
+//
+//    // Clean up old buffers if they exist (prevents memory leaks on re-generation)
+//    if (instanceVBO != 0) glDeleteBuffers(1, &instanceVBO);
+//    if (textureVBO != 0) glDeleteBuffers(1, &textureVBO);
+//
+//    // 2. Setup Model Matrices (Attributes 4, 5, 6, 7)
+//    glGenBuffers(1, &instanceVBO);
+//    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+//    glBufferData(
+//        GL_ARRAY_BUFFER,
+//        modelMatrices.size() * sizeof(glm::mat4),
+//        modelMatrices.data(),
+//        GL_STATIC_DRAW
+//    );
+//
+//    // A mat4 takes up 4 attribute slots
+//    for (int i = 0; i < 4; i++) {
+//        GLuint loc = 4 + i;
+//        glEnableVertexAttribArray(loc);
+//        glVertexAttribPointer(
+//            loc,
+//            4,
+//            GL_FLOAT,
+//            GL_FALSE,
+//            sizeof(glm::mat4),
+//            (void*)(sizeof(float) * i * 4)
+//        );
+//        glVertexAttribDivisor(loc, 1); // Advance once per instance, not per vertex
+//    }
+//
+//    // 3. Setup Texture Indices (Attribute 8)
+//    glGenBuffers(1, &textureVBO);
+//    glBindBuffer(GL_ARRAY_BUFFER, textureVBO);
+//    glBufferData(
+//        GL_ARRAY_BUFFER,
+//        textureIndices.size() * sizeof(int),
+//        textureIndices.data(),
+//        GL_STATIC_DRAW
+//    );
+//
+//    glEnableVertexAttribArray(8);
+//    glVertexAttribIPointer(8, 1, GL_INT, sizeof(int), (void*)0);
+//    glVertexAttribDivisor(8, 1); // Advance once per instance
+//
+//    // 4. CLEANUP (The order here is vital)
+//
+//    // Unbind the buffer first
+//    glBindBuffer(GL_ARRAY_BUFFER, 0);
+//
+//    // Disable the attributes specifically for this VAO so they don't 
+//    // stay active when you use the VAO for other things (like shadow passes)
+//    // They will be re-enabled inside your Forest::draw() call.
+//    for (int i = 4; i <= 8; i++) {
+//        glDisableVertexAttribArray(i);
+//    }
+//
+//    // Finally, unbind the VAO
+//    glBindBuffer(GL_ARRAY_BUFFER, 0);
+//    glBindVertexArray(0);
+//
+//    std::cout << "Instancing successfully set up for " << modelMatrices.size() << " trees." << std::endl;
+//}

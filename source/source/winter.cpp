@@ -231,7 +231,7 @@ void free() {
 	glfwTerminate();
 }
 void createContext() {
-	useInstancingLocation = glGetUniformLocation(shaderProgram, "useInstancing");
+
 	//glUniform1i(useInstancingLocation, 0);
 	// Create and compile our GLSL program from the shader
 	shaderProgram = loadShaders("ShadowMapping.vertexshader", "ShadowMapping.fragmentshader");
@@ -247,8 +247,18 @@ void createContext() {
 	miniMapProgram = loadShaders("MiniMap.vertexshader", "MiniMap.fragmentshader");
 
 
-	glUseProgram(shaderProgram); //??
+	glUseProgram(shaderProgram); //
+	// THIS FIXED THE GIANT TREE ISSUE
+	/* =====================================================================================
+	====================================VERY IMPORTANT ====================================
+	=====================================================================================*/
+	useInstancingLocation = glGetUniformLocation(shaderProgram, "useInstancing");
+	glUniform1i(useInstancingLocation, 0);
+	// BEGIN WITH INSTANCING 0
+
 	// NOTE: Don't forget to delete the shader programs on the free() function
+
+
 
 	// Get pointers to uniforms
 	// --- shaderProgram ---
@@ -354,7 +364,7 @@ void createContext() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	 
 	// FOREST SYSTEM
-	forest = new Forest(treeModel1, shaderProgram, 1); // 100 trees
+	forest = new Forest(treeModel1, shaderProgram, 100); // 100 trees
 	float scale = SCALING_FACTOR; // 200
 	forest->setTerrainBounds(
 		-scale / 2, scale / 2,  // X bounds
@@ -522,6 +532,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
 
 	// 1. SKY DOME (Unlit, no shadows)
+	//sphere->bind();
 	resetDefaultStates();
 	glDisable(GL_CULL_FACE);
 	glDepthFunc(GL_LEQUAL);
@@ -533,7 +544,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glActiveTexture(GL_TEXTURE7);
 	glBindTexture(GL_TEXTURE_2D, skyTexture);
 	glUniform1i(glGetUniformLocation(shaderProgram, "skyTex"), 7);
-
+	glUniform1i(useInstancingLocation, 0); //?
 	mat4 skyM = translate(mat4(1.0f), camera->position) * scale(mat4(1.0f), vec3(30.0f));
 	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &skyM[0][0]);
 	sphere->bind();
@@ -544,6 +555,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glDepthMask(GL_TRUE);
 
 	// 2. LIGHTING GLOBALS
+	glUniform1i(useInstancingLocation, 0);
 	uploadLight(*light);
 	mat4 lightVP = light->lightVP();
 	glUniformMatrix4fv(lightVPLocation, 1, GL_FALSE, &lightVP[0][0]);
@@ -555,6 +567,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glUniform1i(depthMapSampler, 8);
 
 	// 3. TERRAIN
+	glUniform1i(useInstancingLocation, 0);
 	resetDefaultStates();
 	glUniform1i(useTextureLocation, 1); // Terrain mode
 

@@ -73,7 +73,7 @@ public:
     ~Drawable();
 
     void bind();
-
+    int instanceCount = 0;
     /* Bind VAO before calling draw */
     void draw(int mode = GL_TRIANGLES);
 

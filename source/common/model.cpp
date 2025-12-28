@@ -374,16 +374,33 @@ Drawable::~Drawable() {
     glDeleteBuffers(1, &normalsVBO);
     glDeleteBuffers(1, &elementVBO);
     glDeleteBuffers(1, &VAO);
+    // FIX: Use glDeleteVertexArrays for VAOs
+    glDeleteVertexArrays(1, &VAO);
 }
 
 void Drawable::bind() {
     glBindVertexArray(VAO);
+    // CRITICAL: Disable instancing attributes for this object's context
+    // This prevents the "Huge Tree" leak into Terrain/Sky/Suzanne
+    for (int i = 4; i <= 8; i++) {
+        glDisableVertexAttribArray(i);
+        glVertexAttribDivisor(i, 0); // Reset divisor to 0 (per-vertex mode)
+    }
 }
 
+//void Drawable::draw(int mode) {
+//    glDrawElements(mode, indices.size(), GL_UNSIGNED_INT, NULL);
+//}
 void Drawable::draw(int mode) {
-    glDrawElements(mode, indices.size(), GL_UNSIGNED_INT, NULL);
+    if (instanceCount > 1) {
+        // Use instancing if count is set
+        glDrawElementsInstanced(mode, indices.size(), GL_UNSIGNED_INT, NULL, instanceCount);
+    }
+    else {
+        // Standard draw for regular objects
+        glDrawElements(mode, indices.size(), GL_UNSIGNED_INT, NULL);
+    }
 }
-
 void Drawable::createContext() {
     indices = vector<unsigned int>();
     indexVBO(vertices, uvs, normals, indices, indexedVertices, indexedUVS, indexedNormals);
