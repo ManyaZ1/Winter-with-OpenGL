@@ -5,7 +5,7 @@
 #include <fstream>
 // Height constraints for tree placement
 static constexpr float TREE_MIN_HEIGHT = 3.0f;//8.0f;
-static constexpr float TREE_MAX_HEIGHT = 3800.0f;// Raised from 28.0
+static constexpr float TREE_MAX_HEIGHT = 28.0f;// Raised from 28.0
 
 Forest::Forest(Drawable* model, GLuint shaderID, int count)
     : treeModel(model), shader(shaderID), targetInstanceCount(count)
@@ -20,7 +20,7 @@ Forest::Forest(Drawable* model, GLuint shaderID, int count)
     maxZ = 100.0f;
     minY = 0.0f;
     maxY = 50.0f;
-    gridResolution = 512;
+    gridResolution = 1024;
     scalingFactor = 200.0f; // Match SCALING_FACTOR from winter.cpp
 }
 
