@@ -40,8 +40,12 @@ uniform sampler2D diffuseColorSampler; // Slot 2 (Bush PNG)
 //uniform sampler2D barkSampler;    //  (Slot 0)
 //uniform sampler2D needleSampler;  //  (Slot 1)
 
-
-
+// =================================================
+flat in int textureIndex;
+// =================================================
+uniform sampler2D needleTex2;  // Second needle texture
+uniform sampler2D needleTex3;  // Third needle texture (optional)
+// ===========================================================
 
 // light properties
 struct Light {
@@ -51,7 +55,6 @@ struct Light {
     vec3 lightPosition_worldspace;
 };
 uniform Light light;
-uniform Light light2;
 // materials
 struct Material {
     vec4 Ka; 
@@ -222,37 +225,90 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     vec4 _Kd = mtl.Kd;
     vec4 _Ka = mtl.Ka;
     float _Ns = mtl.Ns;
-    // --- NEW TREE LOGIC (Mode 5) ---
-    if (useTexture == 5) {
-        // Check UV X-position (Left < 0.5 = Trunk, Right > 0.5 = Cones)
-        if (vertex_UV.x < 0.5) {
-            // TRUNK: Bark JPG (Double X to unsquish from Blender move)
-            
-            vec2 barkUV = vec2(vertex_UV.x * 2.0, vertex_UV.y)  * vec2(6.0, 6.0); 
-            _Kd.rgb = texture(trunkTex, barkUV).rgb;
-            }   else {
-            // CONES: Needle PNG (Shift back and double X)
-             
-            vec2 branchUV = vec2((vertex_UV.x - 0.5) * 2.0, vertex_UV.y)* vec2(8.0, 8.0);; //* leafScale; // leafScale = vec2(8.0, 8.0)
-            vec4 texColor = texture(needleTex, branchUV);
-            if (texColor.a < 0.1) discard; 
-            _Kd.rgb = texColor.rgb;
+//    // --- NEW TREE LOGIC (Mode 5) ---
+//    if (useTexture == 5) {
+//        // Check UV X-position (Left < 0.5 = Trunk, Right > 0.5 = Cones)
+//        if (vertex_UV.x < 0.5) {
+//            // TRUNK: Bark JPG (Double X to unsquish from Blender move)
+//            
+//            vec2 barkUV = vec2(vertex_UV.x * 2.0, vertex_UV.y)  * vec2(6.0, 6.0); 
+//            _Kd.rgb = texture(trunkTex, barkUV).rgb;
+//            }   else {
+//            // CONES: Needle PNG (Shift back and double X)
+//             
+//            vec2 branchUV = vec2((vertex_UV.x - 0.5) * 2.0, vertex_UV.y)* vec2(8.0, 8.0);; //* leafScale; // leafScale = vec2(8.0, 8.0)
+//            vec4 texColor = texture(needleTex, branchUV);
+//            if (texColor.a < 0.1) discard; 
+//            _Kd.rgb = texColor.rgb;
+//        }
+    // ===== MODIFY TREE LOGIC (Mode 5) TO SUPPORT MULTIPLE TEXTURES =====
+//    if (useTexture == 5) {
+//        // Trunk or needles based on UV
+//        if (vertex_UV.x < 0.5) {
+//            // TRUNK: Bark (same for all instances)
+//            vec2 barkUV = vec2(vertex_UV.x * 2.0, vertex_UV.y) * vec2(6.0, 6.0); 
+//            _Kd.rgb = texture(trunkTex, barkUV).rgb;
+//        } else {
+//            // NEEDLES: Select texture based on instance index
+//            vec2 branchUV = vec2((vertex_UV.x - 0.5) * 2.0, vertex_UV.y) * vec2(8.0, 8.0);
+//            
+//            vec4 texColor;
+//            // Switch between different needle textures based on textureIndex
+//            if (textureIndex == 0) {
+//                texColor = texture(needleTex, branchUV);
+//            } else if (textureIndex == 1) {
+//                texColor = texture(needleTex2, branchUV);
+//            } else {
+//                // You can add needleTex3 here if you have a third texture
+//                // For now, cycle back to first texture
+//                texColor = texture(needleTex, branchUV);
+//            }
+//            
+//            if (texColor.a < 0.1) discard; 
+//            _Kd.rgb = texColor.rgb;
+//        }
+//        // SNOW ACCUMULATION (Part B)
+//        vec3 normal = normalize(vertex_normal_cameraspace.xyz);
+//        float snowMask = clamp(dot(normal, vec3(0, 1, 0)), 0.0, 1.0);
+//        snowMask = pow(snowMask, 4.0); // Snow only on tops
+//    
+//        // Mix white color based on a snowAmount uniform (you'll add this next)
+//        // _Kd.rgb = mix(_Kd.rgb, vec3(1.0), snowMask * snowAmount);
+//
+//        _Ka.rgb = 0.1 * _Kd.rgb;
+//        _Ks.rgb = vec3(0.1); 
+//        _Ns = 5.0;
+//
+//
+//    }
+if (useTexture == 5) {
+    // Trunk or needles based on UV
+    if (vertex_UV.x < 0.5) {
+        // TRUNK: Bark (same for all instances)
+        vec2 barkUV = vec2(vertex_UV.x * 2.0, vertex_UV.y) * vec2(6.0, 6.0); 
+        _Kd.rgb = texture(trunkTex, barkUV).rgb;
+    } else {
+        // NEEDLES: Select texture based on instance index
+        vec2 branchUV = vec2((vertex_UV.x - 0.5) * 2.0, vertex_UV.y) * vec2(8.0, 8.0);
+        
+        vec4 texColor;
+        // Switch between different needle textures based on textureIndex
+        if (textureIndex == 0) {
+            texColor = texture(needleTex, branchUV);      // tree2.jpg
+        } else if (textureIndex == 1) {
+            texColor = texture(needleTex2, branchUV);     // fir.jpg
+        } else {
+            texColor = texture(needleTex3, branchUV);     // chrys.jpg
         }
-    
-        // SNOW ACCUMULATION (Part B)
-        vec3 normal = normalize(vertex_normal_cameraspace.xyz);
-        float snowMask = clamp(dot(normal, vec3(0, 1, 0)), 0.0, 1.0);
-        snowMask = pow(snowMask, 4.0); // Snow only on tops
-    
-        // Mix white color based on a snowAmount uniform (you'll add this next)
-        // _Kd.rgb = mix(_Kd.rgb, vec3(1.0), snowMask * snowAmount);
-
-        _Ka.rgb = 0.1 * _Kd.rgb;
-        _Ks.rgb = vec3(0.1); 
-        _Ns = 5.0;
-
-
+        
+        if (texColor.a < 0.1) discard; 
+        _Kd.rgb = texColor.rgb;
     }
+    
+    _Ka.rgb = 0.1 * _Kd.rgb;
+    _Ks.rgb = vec3(0.1); 
+    _Ns = 5.0;
+}
     if (useTexture == 1) {
         vec3 terrainColor = mix(
         texture(terrainTex, vertex_UV_tiled).rgb,
@@ -282,10 +338,10 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             discard;
 
         _Kd.rgb = texColor.rgb;
-        _Ka.rgb = 0.15 * _Kd.rgb;
+        _Ka.rgb = 0.4 * _Kd.rgb; // boost beacuse bush is just 3 planes
         _Ks.rgb = vec3(0.05);
         _Ns = 4.0;
-}
+    }
 
     // Phong Reflection Model
     // 1. Ambient

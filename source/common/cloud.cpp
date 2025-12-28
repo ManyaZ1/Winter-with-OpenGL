@@ -113,6 +113,17 @@ void CloudSystem::render(mat4 viewMatrix, mat4 projectionMatrix) {
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
 }
+
+
+CloudSystem::~CloudSystem() {
+    if (cloudQuad) {
+        delete cloudQuad;
+    }
+    // Delete the array of 2 textures
+    glDeleteTextures(2, cloudTextures);
+}
+
+
 //
 //void CloudSystem::render(mat4 viewMatrix, mat4 projectionMatrix) {
 //    if (clouds.empty()) return;
@@ -161,11 +172,3 @@ void CloudSystem::render(mat4 viewMatrix, mat4 projectionMatrix) {
 //    glDepthMask(GL_TRUE);
 //    glDisable(GL_BLEND);
 //}
-
-CloudSystem::~CloudSystem() {
-    if (cloudQuad) {
-        delete cloudQuad;
-    }
-    // Delete the array of 2 textures
-    glDeleteTextures(2, cloudTextures);
-}

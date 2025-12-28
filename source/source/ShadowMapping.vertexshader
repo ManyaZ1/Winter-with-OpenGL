@@ -3,7 +3,16 @@
 layout(location = 0) in vec3 vertexPosition_modelspace;
 layout(location = 1) in vec3 vertexNormal_modelspace;
 layout(location = 2) in vec2 vertexUV;
-
+// ===== ADD THESE NEW INSTANCING ATTRIBUTES =====
+// Per-instance model matrix (4 vec4s = mat4)
+layout(location = 4) in vec4 instanceMatrix_row0;
+layout(location = 5) in vec4 instanceMatrix_row1;
+layout(location = 6) in vec4 instanceMatrix_row2;
+layout(location = 7) in vec4 instanceMatrix_row3;
+// Per-instance texture index
+layout(location = 8) in int instanceTextureIndex;
+uniform bool useInstancing; 
+// ================================================
 
 
 // Phong 
@@ -40,6 +49,11 @@ out vec2 vertex_UV_tiled;
 out vec3 fragPos_modelspace;
 uniform int useTexture;
 
+// ===== ADD THIS NEW OUTPUT FOR FRAGMENT SHADER =====
+flat out int textureIndex;
+// ===================================================
+
+
 // Source - https://stackoverflow.com/a
 // Posted by HuaTham, modified by community. See post 'Timeline' for change history
 // Retrieved 2025-12-07, License - CC BY-SA 3.0
@@ -58,13 +72,33 @@ uniform vec3 nodePositions[4];
 const float treeTotalHeight = 10.0;
 
 void main() {
+    // Detect if this is an instanced draw by checking if instance matrix is non-zero
+    //bool isInstanced = (dot(instanceMatrix_row0, instanceMatrix_row0) > 0.0001);
+    // Choose which model matrix to use
+    mat4 modelMatrix;
+    //if (isInstanced) {
+    if (useInstancing) {
+        // Construct model matrix from instance attributes
+        modelMatrix = mat4(
+            instanceMatrix_row0,
+            instanceMatrix_row1,
+            instanceMatrix_row2,
+            instanceMatrix_row3
+        );
+        textureIndex = instanceTextureIndex;
+    } else {
+        // Use uniform model matrix for non-instanced objects
+        modelMatrix = M;
+        textureIndex = 0; // Default for non-instanced
+    }
+
     vec3 lightDir_world = normalize(-lightDirection_worldspace);
     lightDir_cameraspace = normalize((V * vec4(lightDir_world, 0.0)).xyz);
 
-   
+   // ===== SKY DOME SECTION =====
    if (useTexture == 3) { //spherical mapping for sky dome
         // position for rasterizer
-        gl_Position = P * V * M * vec4(vertexPosition_modelspace, 1.0);
+        gl_Position = P * V * modelMatrix * vec4(vertexPosition_modelspace, 1.0);
 
         // pass model-space position to fragment so we can compute UVs per-fragment
         fragPos_modelspace = vertexPosition_modelspace;
@@ -73,6 +107,7 @@ void main() {
         vertex_UV = vec2(0.0);
         return;
     }
+    // ===== TREE SECTION =====
     else if(useTexture == 5){
         // PHYSICS LOGIC FOR 10m TREE
         float h = clamp(vertexPosition_modelspace.y / treeTotalHeight, 0.0, 1.0);
@@ -92,88 +127,22 @@ void main() {
 
         vec3 bentPosition = vertexPosition_modelspace + currentOffset;
         
-        gl_Position = P * V * M * vec4(bentPosition, 1.0);
-        vertex_position_cameraspace = V * M * vec4(bentPosition, 1.0);
-        //vertex_normal_cameraspace = V * M * vec4(vertexNormal_modelspace * normDir, 0.0);
-        vertex_normal_cameraspace = mat4(transpose(inverse(mat3(V * M)))) * vec4(vertexNormal_modelspace, 0);
-        //vertex_UV = vertexUV;
+        // USE modelMatrix instead of M
+       gl_Position = P * V * modelMatrix * vec4(bentPosition, 1.0);
+        vertex_position_cameraspace = V * modelMatrix * vec4(bentPosition, 1.0);
+        vertex_normal_cameraspace = mat4(transpose(inverse(mat3(V * modelMatrix)))) * vec4(vertexNormal_modelspace, 0);
         vertex_UV = vertexUV * uvScale;
-
-        vertex_position_lightspace = lightVP * M * vec4(bentPosition, 1.0);
-        //light_position_cameraspace = V * vec4(light.lightPosition_worldspace, 1.0);
-        
+        vertex_position_lightspace = lightVP * modelMatrix * vec4(bentPosition, 1.0);
     }
-    /*if (useTexture == 3) {
-        gl_Position =  P * V * M * vec4(vertexPosition_modelspace, 1);
-    
-        vec3 normPos = normalize(vertexPosition_modelspace);
-        float pi = 3.14159265359;
-
-        // Stable spherical mapping with no seams
-        vertex_UV.x = clamp(atan2(normPos.z, normPos.x+1e-8) / (2.0 * pi) + 0.5,-1.0, 1.0  );
-
-        // Prevent asin precision issues at horizon
-        float y = clamp(normPos.y, -1.0, 1.0);
-        vertex_UV.y = (asin(y) / pi + 0.5);
-    }*/
-    
-/*if (useTexture == 3) {
-    gl_Position =  P * V * M * vec4(vertexPosition_modelspace, 1);
-    
-    vec3 normPos = normalize(vertexPosition_modelspace);
-    float pi = 3.14159265359;
-
-    // Stable spherical mapping with no seams
-    vertex_UV.x = clamp(atan2(normPos.z, normPos.x+1e-8) / (2.0 * pi) + 0.5,-1.0, 1.0  );
-
-    // Prevent asin precision issues at horizon
-    float y = clamp(normPos.y, -1.0, 1.0);
-    vertex_UV.y = (asin(y) / pi + 0.5);
-    
-    // Optional: force wrap cleanly
-    //vertex_UV.y = fract(vertex_UV.y);
-    }*/
-//if (useTexture == 3) {
-//    gl_Position =  P * V * M * vec4(vertexPosition_modelspace, 1);
-//    
-//    // Generate spherical UVs for sky dome
-//    vec3 normPos = normalize(vertexPosition_modelspace);
-//    
-//    // Better spherical mapping
-//    float pi = 3.14159265359;
-//    //pi = 3.0f;
-//    if (abs(normPos.x)< 0.0001 && abs(normPos.z)<0.0001)    {
-//        vertex_UV.x = 0.5;
-//        vertex_UV.y = 0.5 + asin(normPos.y) / pi;
-//    }
-//    else{
-//        vertex_UV.x = 0.5 + atan(normPos.x, normPos.z) / (2.0 * pi);
-//        vertex_UV.y = 0.5 + asin(normPos.y) / pi;
-//    }    return;}
-    
-
     else {
         
     // Output position of the vertex
-    gl_Position =  P * V * M * vec4(vertexPosition_modelspace, 1);
+    gl_Position = P * V * modelMatrix * vec4(vertexPosition_modelspace, 1);
+    vertex_position_cameraspace = V * modelMatrix * vec4(vertexPosition_modelspace, 1);
+    vertex_normal_cameraspace = mat4(transpose(inverse(mat3(V * modelMatrix)))) * vec4(vertexNormal_modelspace, 0);
+    vertex_UV = vertexUV;
     
-    // FS
-    vertex_position_cameraspace = V * M * vec4(vertexPosition_modelspace, 1);
-    //vertex_normal_cameraspace = V * M * vec4(vertexNormal_modelspace, 0);
-    //vertex_normal_cameraspace = V * M * vec4(vertexNormal_modelspace * normDir, 0);
-    vertex_normal_cameraspace = mat4(transpose(inverse(mat3(V * M)))) * vec4(vertexNormal_modelspace, 0);
-    //light_position_cameraspace = V * vec4(light.lightPosition_worldspace, 1);
-    
-    
-    vertex_UV = vertexUV; //?
-    vertex_UV_tiled = vertexUV * uvScale;
-
-    // Task 4.2
-
-    vertex_position_lightspace = lightVP*M*vec4(vertexPosition_modelspace, 1); //pame sto world space kai meta sto light space
-
-    // light space 2
-    //light_position_cameraspace2 = V * vec4(light2.lightPosition_worldspace, 1);
-    //vertex_position_lightspace2 = light2VP * M * vec4(vertexPosition_modelspace, 1);
+    vertex_position_lightspace = lightVP * modelMatrix * vec4(vertexPosition_modelspace, 1);
     }
+    vertex_UV_tiled = vertexUV * uvScale;
 }

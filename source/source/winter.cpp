@@ -20,7 +20,7 @@
 #include <common/texture.h>
 #include <common/light.h> 
 #include "common/cloud.h"
-
+#include "common/forest.h"
 #include <vector>
 
 
@@ -80,11 +80,12 @@ Drawable* quad;
 Drawable* treeModel1; 
 Drawable* bushModel;
 GLuint treeDiffuseTex;
+GLuint treeDiffuseTex2;
 GLuint bushTexture1;
 GLuint bushTexture2;
 GLuint bushTexture3;
 GLuint chrysTexture;
-
+GLuint useInstancingLocation;
 
 
 // locations for shaderProgram
@@ -135,7 +136,8 @@ GLuint normDirLocation;
 // clouds
 CloudSystem* cloudSystem;
 
-
+//forest
+Forest* forest;
 
 // Create two sample materials
 const Material polishedSilver
@@ -225,11 +227,12 @@ void free() {
 	glDeleteProgram(shaderProgram);
 	glDeleteProgram(depthProgram);
 	glDeleteProgram(miniMapProgram);
-
+	delete forest;
 	glfwTerminate();
 }
 void createContext() {
-
+	useInstancingLocation = glGetUniformLocation(shaderProgram, "useInstancing");
+	//glUniform1i(useInstancingLocation, 0);
 	// Create and compile our GLSL program from the shader
 	shaderProgram = loadShaders("ShadowMapping.vertexshader", "ShadowMapping.fragmentshader");
 
@@ -307,7 +310,7 @@ void createContext() {
 	// model2 (sphere) is used for light visualization, keep loading it
 	sphere = new Drawable("earth.obj");
 
-	// <===============TRRRRREEEEEEEEEE========================>
+	// <=============== tree ========================>
 	// 
 	// Load tree models
 	// After glUseProgram(shaderProgram);
@@ -321,13 +324,52 @@ void createContext() {
 		};
 		glUniform3fv(nodePositionsLocation, 4, &defaultNodes[0][0]);
 	}
+	//tre oj
 	treeModel1 = new Drawable("assets/tree.obj");
-	//treeDiffuseTex = loadSOIL("assets/fir.jpg");
+
+	// 3 tree textures
+	treeDiffuseTex2 = loadSOIL("assets/fir.jpg");
+	glBindTexture(GL_TEXTURE_2D, treeDiffuseTex2);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	treeDiffuseTex = loadSOIL("assets/tree2.jpg");
+	glBindTexture(GL_TEXTURE_2D, treeDiffuseTex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	
+
+	chrysTexture = loadSOIL("assets/chrys.jpg"); //best?
+	glBindTexture(GL_TEXTURE_2D, chrysTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	// tree
+	trunkTexture = loadSOIL("assets/bark.jpg");
+	glBindTexture(GL_TEXTURE_2D, trunkTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	//needleTexture = loadSOIL("assets/fir.jpg");
+	needleTexture = loadSOIL("assets/tree2.jpg");
+	glBindTexture(GL_TEXTURE_2D, needleTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	 
+	// FOREST SYSTEM
+	forest = new Forest(treeModel1, shaderProgram, 1); // 100 trees
+	float scale = SCALING_FACTOR; // 200
+	forest->setTerrainBounds(
+		-scale / 2, scale / 2,  // X bounds
+		-scale / 2, scale / 2,  // Z bounds
+		0.0f, 50.0f,        // Y bounds
+		2.0f              // scaling factor //? the heightmap is already scaled
+	);
+	forest->loadTerrainBinary("assets/heightmap/terrain_data.bin");
+	// Generate tree positions
+	forest->generate();
+
 	//BUSH
 	bushModel = new Drawable("assets/bush.obj");
-	bushTexture1 = loadSOIL("assets/bush1.png");
+	// 3 bush textures
+	bushTexture1 = loadSOIL("assets/pixel_bush.png");
 	glBindTexture(GL_TEXTURE_2D, bushTexture1);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -339,10 +381,7 @@ void createContext() {
 	glBindTexture(GL_TEXTURE_2D, bushTexture3);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	chrysTexture = loadSOIL("assets/chrys.jpg");
-	glBindTexture(GL_TEXTURE_2D, chrysTexture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	
 
 	/* CLOUD SYSTEM */
 	// Initialize cloud system
@@ -424,17 +463,7 @@ void createContext() {
 
 
 
-	// tree
-	trunkTexture = loadSOIL("assets/bark.jpg");
-	glBindTexture(GL_TEXTURE_2D, trunkTexture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	//needleTexture = loadSOIL("assets/fir.jpg");
-	needleTexture = loadSOIL("assets/tree2.jpg");
-
-	glBindTexture(GL_TEXTURE_2D, needleTexture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	
 	GLenum err = glGetError();
 	if (err != GL_NO_ERROR) {
 		cout << "OpenGL error after getting uniform locations: " << err << endl;
@@ -445,11 +474,398 @@ void createContext() {
 	if (projectionMatrixLocation == -1) cout << "WARNING: P not found!" << endl;
 	if (viewMatrixLocation == -1) cout << "WARNING: V not found!" << endl;
 	if (modelMatrixLocation == -1) cout << "WARNING: M not found!" << endl;
+	//everything orange fix
+	//// CRITICAL: Disable instancing attributes for non-instanced rendering
+	//glDisableVertexAttribArray(4);
+	//glDisableVertexAttribArray(5);
+	//glDisableVertexAttribArray(6);
+	//glDisableVertexAttribArray(7);
+	//glDisableVertexAttribArray(8);
 
+	//// Set default values for instancing attributes (all zeros)
+	//glVertexAttrib4f(4, 0.0f, 0.0f, 0.0f, 0.0f);
+	//glVertexAttrib4f(5, 0.0f, 0.0f, 0.0f, 0.0f);
+	//glVertexAttrib4f(6, 0.0f, 0.0f, 0.0f, 0.0f);
+	//glVertexAttrib4f(7, 0.0f, 0.0f, 0.0f, 0.0f);
+	//glVertexAttribI4i(8, 0, 0, 0, 0);
 
 }
 
+// Helper to reset common states to prevent leakage
+void resetDefaultStates() {
+	glUniform1i(useInstancingLocation, 0);
+	glUniform2f(uvScaleLocation, 1.0f, 1.0f);
+	glUniform1f(normDirLocation, 1.0f);
+
+	// Explicitly disable instancing attributes just in case
+	for (int i = 4; i <= 8; i++) glDisableVertexAttribArray(i);
+}
 void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height) {
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, screen_width, screen_height);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glUseProgram(shaderProgram);
+
+	// CRITICAL: Ensure instancing is OFF before doing anything else
+	glUniform1i(useInstancingLocation, 0);
+
+	// Now proceed with Sky Dome...
+	glDisable(GL_CULL_FACE);
+	// Initial Setup
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, screen_width, screen_height);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glUseProgram(shaderProgram);
+	glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
+	glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
+
+	// 1. SKY DOME (Unlit, no shadows)
+	resetDefaultStates();
+	glDisable(GL_CULL_FACE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthMask(GL_FALSE);
+
+	glUniform1i(useTextureLocation, 3); // Sky mode
+	glUniform1f(normDirLocation, -1.0f);
+
+	glActiveTexture(GL_TEXTURE7);
+	glBindTexture(GL_TEXTURE_2D, skyTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "skyTex"), 7);
+
+	mat4 skyM = translate(mat4(1.0f), camera->position) * scale(mat4(1.0f), vec3(30.0f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &skyM[0][0]);
+	sphere->bind();
+	sphere->draw();
+
+	glEnable(GL_CULL_FACE);
+	glDepthFunc(GL_LESS);
+	glDepthMask(GL_TRUE);
+
+	// 2. LIGHTING GLOBALS
+	uploadLight(*light);
+	mat4 lightVP = light->lightVP();
+	glUniformMatrix4fv(lightVPLocation, 1, GL_FALSE, &lightVP[0][0]);
+	glUniform3fv(lightDirectionLocation, 1, &light->direction[0]);
+
+	// Bind Shadow Map once to a high slot
+	glActiveTexture(GL_TEXTURE8);
+	glBindTexture(GL_TEXTURE_2D, depthTexture);
+	glUniform1i(depthMapSampler, 8);
+
+	// 3. TERRAIN
+	resetDefaultStates();
+	glUniform1i(useTextureLocation, 1); // Terrain mode
+
+	float repeats_on_surface = 600.0f;
+	float uvTile = repeats_on_surface / SCALING_FACTOR;
+	glUniform2f(uvScaleLocation, uvTile, uvTile);
+	glUniform1f(scaling_factor_location, SCALING_FACTOR);
+
+	// Bind all terrain textures
+	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, terrainTexture);
+	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, terrainTexture2);
+	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, waterTexture);
+	glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, waterTexture2);
+	glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, bottomTexture);
+	glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, maskTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "terrainTex"), 0);
+	glUniform1i(glGetUniformLocation(shaderProgram, "terrainTex2"), 1);
+	glUniform1i(glGetUniformLocation(shaderProgram, "waterTex"), 2);
+	glUniform1i(glGetUniformLocation(shaderProgram, "waterTex2"), 3);
+	glUniform1i(glGetUniformLocation(shaderProgram, "bottomTex"), 4);
+	glUniform1i(glGetUniformLocation(shaderProgram, "maskTex"), 5);
+	glUniform1f(glGetUniformLocation(shaderProgram, "time"), glfwGetTime());
+
+	mat4 terrainM = translate(mat4(), vec3(0.0f, -1.0f, -5.0f)) * scale(mat4(), vec3(SCALING_FACTOR));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &terrainM[0][0]);
+	terrain->bind();
+	terrain->draw();
+
+	// 4. FOREST (Instanced) - FIXED VERSION
+	resetDefaultStates();
+	glUniform1i(useInstancingLocation, 1);
+	glUniform1i(useTextureLocation, 5); // Tree mode
+	glUniform2f(uvScaleLocation, 1.0f, 1.0f); // Reset UV scale for trees
+
+	// CRITICAL FIX: Bind tree textures BEFORE drawing
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, trunkTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "trunkTex"), 0);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, needleTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "needleTex"), 1);
+
+	// Bind additional needle textures if you have them
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, treeDiffuseTex2); // fir.jpg
+	glUniform1i(glGetUniformLocation(shaderProgram, "needleTex2"), 2);
+
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, chrysTexture); // chrys.jpg  
+	glUniform1i(glGetUniformLocation(shaderProgram, "needleTex3"), 3);
+
+	forest->draw();
+
+	// CRITICAL: Properly disable instancing after forest
+	glUniform1i(useInstancingLocation, 0);
+	for (int i = 4; i <= 8; i++) {
+		glDisableVertexAttribArray(i);
+	}
+
+	// 5. SUN (Emissive)
+	resetDefaultStates();
+	glUniform1i(useTextureLocation, 2); // Sun mode
+	glUniform1f(normDirLocation, -1.0f);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, sunTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "sunTex"), 0);
+
+	vec3 sunPos = vec3(35.0f, 50.0f, 20.0f);
+	mat4 sunM = translate(mat4(1.0f), sunPos) * scale(mat4(1.0f), vec3(0.9f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &sunM[0][0]);
+	sphere->bind();
+	sphere->draw();
+
+	// 6. BUSH
+	resetDefaultStates();
+	glUniform1i(useTextureLocation, 6); // Bush mode
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, bushTexture2);
+	glUniform1i(diffuseColorSampler, 0);
+
+	mat4 bushM = translate(mat4(1.0f), vec3(22.0f, 3.0f, 20.0f)) * scale(mat4(1.0f), vec3(0.015f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &bushM[0][0]);
+	bushModel->bind();
+	bushModel->draw();
+
+	// 7. SUZANNE
+	resetDefaultStates();
+	glUniform1i(useTextureLocation, 1);
+	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, modelDiffuseTexture);
+	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, modelSpecularTexture);
+	glUniform1i(diffuseColorSampler, 0);
+	glUniform1i(specularColorSampler, 1);
+
+	mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &suzanneM[0][0]);
+	model1->bind();
+	model1->draw();
+}
+void lighting_pass3(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height) {
+	// Initial Setup
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, screen_width, screen_height);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glUseProgram(shaderProgram);
+	glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
+	glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
+
+	// 1. SKY DOME (Unlit, no shadows)
+	resetDefaultStates();
+	glDisable(GL_CULL_FACE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthMask(GL_FALSE);
+
+	glUniform1i(useTextureLocation, 3); // Sky mode [cite: 110]
+	glUniform1f(normDirLocation, -1.0f);
+
+	glActiveTexture(GL_TEXTURE7);
+	glBindTexture(GL_TEXTURE_2D, skyTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "skyTex"), 7);
+
+	mat4 skyM = translate(mat4(1.0f), camera->position) * scale(mat4(1.0f), vec3(30.0f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &skyM[0][0]);
+	sphere->bind();
+	sphere->draw();
+
+	glEnable(GL_CULL_FACE);
+	glDepthFunc(GL_LESS);
+	glDepthMask(GL_TRUE);
+
+	// 2. LIGHTING GLOBALS
+	uploadLight(*light);
+	mat4 lightVP = light->lightVP();
+	glUniformMatrix4fv(lightVPLocation, 1, GL_FALSE, &lightVP[0][0]);
+	glUniform3fv(lightDirectionLocation, 1, &light->direction[0]);
+
+	// Bind Shadow Map once to a high slot
+	glActiveTexture(GL_TEXTURE8);
+	glBindTexture(GL_TEXTURE_2D, depthTexture);
+	glUniform1i(depthMapSampler, 8);
+
+	// 3. TERRAIN
+	resetDefaultStates();
+	glUniform1i(useTextureLocation, 1); // Terrain mode [cite: 73]
+
+	float repeats_on_surface = 600.0f;
+	float uvTile = repeats_on_surface / SCALING_FACTOR;
+	glUniform2f(uvScaleLocation, uvTile, uvTile);
+	glUniform1f(scaling_factor_location, SCALING_FACTOR);
+
+	// Bind all terrain textures [cite: 73, 74, 75, 76]
+	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, terrainTexture);
+	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, terrainTexture2);
+	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, waterTexture);
+	glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, waterTexture2);
+	glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, bottomTexture);
+	glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, maskTexture);
+	glUniform1f(glGetUniformLocation(shaderProgram, "time"), glfwGetTime());
+
+	mat4 terrainM = translate(mat4(), vec3(0.0f, -1.0f, -5.0f)) * scale(mat4(), vec3(SCALING_FACTOR));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &terrainM[0][0]);
+	terrain->bind();
+	terrain->draw();
+
+	// 4. FOREST (Instanced)
+	resetDefaultStates();
+	glUniform1i(useInstancingLocation, 1);
+	glUniform1i(useTextureLocation, 5); // Tree mode [cite: 63]
+
+	// Bind Tree Textures to slots 0 and 1 [cite: 63, 64]
+	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, trunkTexture);
+	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, needleTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "trunkTex"), 0);
+	glUniform1i(glGetUniformLocation(shaderProgram, "needleTex"), 1);
+
+	//forest->draw();
+
+	// 5. SUN (Emissive)
+	resetDefaultStates();
+	glUniform1i(useTextureLocation, 2); // Sun mode [cite: 12]
+	glUniform1f(normDirLocation, -1.0f);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, sunTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "sunTex"), 0);
+
+	vec3 sunPos = vec3(35.0f, 50.0f, 20.0f);
+	mat4 sunM = translate(mat4(1.0f), sunPos) * scale(mat4(1.0f), vec3(0.9f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &sunM[0][0]);
+	sphere->bind();
+	sphere->draw();
+
+	// 6. BUSH
+	resetDefaultStates();
+	glUniform1i(useTextureLocation, 6); // Bush mode [cite: 79]
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, bushTexture2);
+	glUniform1i(diffuseColorSampler, 0);
+
+	mat4 bushM = translate(mat4(1.0f), vec3(22.0f, 3.0f, 20.0f)) * scale(mat4(1.0f), vec3(0.015f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &bushM[0][0]);
+	bushModel->bind();
+	bushModel->draw();
+
+	// 7. SUZANNE
+	resetDefaultStates();
+	glUniform1i(useTextureLocation, 1); // Using mode 1 for generic texturing
+	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, modelDiffuseTexture);
+	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, modelSpecularTexture);
+	glUniform1i(diffuseColorSampler, 0);
+	glUniform1i(specularColorSampler, 1);
+
+	mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &suzanneM[0][0]);
+	model1->bind();
+	model1->draw();
+}
+
+void lighting_pass2(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height) {
+	// 1. Initial State Reset
+	glUniform1i(useInstancingLocation, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, screen_width, screen_height);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glUseProgram(shaderProgram);
+	glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
+	glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
+
+	// --- SKY DOME (Non-instanced) ---
+	glDisable(GL_CULL_FACE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthMask(GL_FALSE);
+	glUniform1i(useTextureLocation, 3); 
+		mat4 skydomeModelMatrix = glm::translate(mat4(1.0f), camera->position) * glm::scale(mat4(1.0f), vec3(30.0f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &skydomeModelMatrix[0][0]);
+	sphere->bind();
+	sphere->draw();
+	glEnable(GL_CULL_FACE);
+	glDepthFunc(GL_LESS);
+	glDepthMask(GL_TRUE);
+
+	// --- TERRAIN (Non-instanced) ---
+	glUniform1i(useTextureLocation, 1); 
+		uploadLight(*light);
+	mat4 lightVP = light->lightVP();
+	glUniformMatrix4fv(lightVPLocation, 1, GL_FALSE, &lightVP[0][0]);
+
+	// Bind terrain textures [cite: 38, 39]
+	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, terrainTexture);
+	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, terrainTexture2);
+	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, waterTexture);
+	glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, waterTexture2);
+	glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, bottomTexture);
+	glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, maskTexture);
+
+	glUniform1i(glGetUniformLocation(shaderProgram, "terrainTex"), 0);
+	glUniform1i(glGetUniformLocation(shaderProgram, "terrainTex2"), 1);
+	glUniform1i(glGetUniformLocation(shaderProgram, "waterTex"), 2);
+	glUniform1i(glGetUniformLocation(shaderProgram, "waterTex2"), 3);
+	glUniform1i(glGetUniformLocation(shaderProgram, "bottomTex"), 4);
+	glUniform1i(glGetUniformLocation(shaderProgram, "maskTex"), 5);
+
+
+
+	glUniform1f(glGetUniformLocation(shaderProgram, "time"), glfwGetTime());
+
+
+
+
+
+	float scaling_factor = SCALING_FACTOR;
+	mat4 terrainM = translate(mat4(), vec3(0.0f, -1.0f, -5.0f)) * scale(mat4(), vec3(scaling_factor));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &terrainM[0][0]);
+	terrain->bind();
+	terrain->draw();
+
+	// --- FOREST (Instanced) ---
+	glUniform1i(useInstancingLocation, 1); 
+	//forest->draw();
+
+	// --- CRITICAL RESET: Disable Instancing Attributes after Forest ---
+	glUniform1i(useInstancingLocation, 0); 
+		glDisableVertexAttribArray(4); // Matrix row 0 [cite: 2]
+	glDisableVertexAttribArray(5); // Matrix row 1 [cite: 3]
+	glDisableVertexAttribArray(6); // Matrix row 2 [cite: 3]
+	glDisableVertexAttribArray(7); // Matrix row 3 [cite: 3]
+	glDisableVertexAttribArray(8); // Texture Index [cite: 4]
+
+	// --- SUN (Non-instanced) ---
+	glUniform1i(useTextureLocation, 2); 
+		vec3 sunPos = vec3(35.0f, 50.0f, 20.0f);
+	mat4 sunModel = translate(mat4(1.0f), sunPos) * scale(mat4(1.0f), vec3(0.9f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &sunModel[0][0]);
+	sphere->bind();
+	sphere->draw();
+
+	// --- SUZANNE (Non-instanced) ---
+	glUniform1i(useTextureLocation, 1);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, modelDiffuseTexture);
+	mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
+	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &suzanneM[0][0]);
+	model1->bind();
+	model1->draw();
+}
+void lighting_pass_old(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height) {
+	glUniform1i(useInstancingLocation, 0); // disable instancing for terrain and sky
+
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	//glViewport(0, 0, W_WIDTH, W_HEIGHT);
@@ -586,11 +1002,11 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glUniform1i(useTextureLocation, 0);
 
 
-	/*===============================================================load tree===========================================================*/
+	/*=============================================================== LOAD TREE ===========================================================*/
 	///   /\
 	///  /  \
     ///   ||
-    glUniform1i(useTextureLocation, 5);
+	/*glUniform1i(useTextureLocation, 5);
 
 	// Trunk → texture unit 0
 	glActiveTexture(GL_TEXTURE0);
@@ -614,7 +1030,17 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 
 	// 4. Draw
 	treeModel1->bind();
-	treeModel1->draw();
+	treeModel1->draw();*/
+	glUniform1i(useInstancingLocation, 1);  // Enable instancing
+	forest->draw();
+	glUniform1i(useInstancingLocation, 0);  // Disable 
+	glDisableVertexAttribArray(4); // instanceMatrix_row0
+	glDisableVertexAttribArray(5); // ...
+	glDisableVertexAttribArray(6);
+	glDisableVertexAttribArray(7);
+	glDisableVertexAttribArray(8);
+
+
 	// Reset UV scale for other objects
 	glUniform2f(uvScaleLocation, 1.0f, 1.0f);
 
@@ -660,6 +1086,8 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 }
 
 void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
+	glUniform1i(useInstancingLocation, 0);  // Disable instancing for depth pass
+
 	glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
 	glBindFramebuffer(GL_FRAMEBUFFER, depthFBO);
 	glClear(GL_DEPTH_BUFFER_BIT);
@@ -680,13 +1108,21 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 
 	// Use the same model matrix used in the lighting pass
 	//mat4 treeM = translate(mat4(1.0f), vec3(10.0f, 0.0f, 10.0f)) * scale(mat4(1.0f), vec3(0.5f));
-	mat4 treeM = translate(mat4(1.0f), vec3(20.0f, 3.0f, 20.0f))
+	/*mat4 treeM = translate(mat4(1.0f), vec3(20.0f, 3.0f, 20.0f))
 		* scale(mat4(1.0f), vec3(0.5f));
-	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &treeM[0][0]); 
+	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &treeM[0][0]); */
 
-	treeModel1->bind();
-	treeModel1->draw();
+	//treeModel1->bind();
+	//treeModel1->draw();
 
+	// Draw forest in shadow pass
+	glUniform1i(useInstancingLocation, 1);  // Enable instancing
+	//forest->draw();
+	glUniform1i(useInstancingLocation, 0);  // Disable 
+
+	// Reset to standard texturing for Suzanne and others
+	glUniform1i(useTextureLocation, 1);
+	glUniform2f(uvScaleLocation, 1.0f, 1.0f);
 	// Render suzanne in shadow pass
 	mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
 	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &suzanneM[0][0]);
@@ -809,7 +1245,7 @@ void mainLoop() {
 		glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
 		cloudSystem->render(viewMatrix, projectionMatrix);
 		// Task 2.2:
-		renderMiniMap();
+		//renderMiniMap();
 
 
 		glfwSwapBuffers(window);

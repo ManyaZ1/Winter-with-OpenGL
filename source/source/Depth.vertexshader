@@ -2,13 +2,46 @@
 
 // Input vertex data, different for all executions of this shader.
 layout(location = 0) in vec3 vertexPosition_modelspace;
+// ===== ADD INSTANCING ATTRIBUTES =====
+layout(location = 4) in vec4 instanceMatrix_row0;
+layout(location = 5) in vec4 instanceMatrix_row1;
+layout(location = 6) in vec4 instanceMatrix_row2;
+layout(location = 7) in vec4 instanceMatrix_row3;
+layout(location = 8) in int instanceTextureIndex;
+// =====================================
+
+uniform bool useInstancing; 
 
 // Values that stay constant for the whole mesh.
 uniform mat4 VP;
 //uniform mat4 VP2;
 uniform mat4 M;
 
-void main()
-{
-    gl_Position =  VP * M * vec4(vertexPosition_modelspace, 1);
+
+void main() {
+    // ===== DETECT INSTANCING =====
+    //bool isInstanced = (dot(instanceMatrix_row0, instanceMatrix_row0) > 0.0001);
+    
+    mat4 modelMatrix;
+    //if (isInstanced) {
+    if (useInstancing) {
+        modelMatrix = mat4(
+            instanceMatrix_row0,
+            instanceMatrix_row1,
+            instanceMatrix_row2,
+            instanceMatrix_row3
+        );
+    } else {
+        modelMatrix = M;
+    }
+    // =============================
+    
+    // Transform to light space
+    gl_Position = VP * modelMatrix * vec4(vertexPosition_modelspace, 1.0);
 }
+
+
+//void main()
+//{
+//    gl_Position =  VP * M * vec4(vertexPosition_modelspace, 1);
+//}
