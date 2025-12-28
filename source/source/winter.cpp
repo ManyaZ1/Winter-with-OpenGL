@@ -23,12 +23,7 @@
 #include "common/forest.h"
 #include <vector>
 
-
-
 #define SCALING_FACTOR 200//60 //lab.cpp kai camera.cpp
-
-
-
 
 using namespace std;
 using namespace glm;
@@ -46,8 +41,61 @@ void free();
 #define SHADOW_WIDTH 4096//2048    8192
 #define SHADOW_HEIGHT 4096//2048  8192
 
+// Global Variables
+GLFWwindow* window;
+Camera* camera;
+Light* light;
+Light* light2;
+Drawable* model1;
+Drawable* sphere;
+Drawable* terrain;
+Drawable* plane;
+GLuint modelDiffuseTexture, modelSpecularTexture;
+GLuint depthFBO, depthTexture;
+GLuint depthFBO2, depthTexture2;
+// Global instance to hold your terrain data after loading
+
+Drawable* quad;
+
+// tree
+Drawable* treeModel1; 
+Drawable* bushModel;
+
+GLuint lightPowerLocation;
+
+// locations for programs.depth
+GLuint shadowViewProjectionLocation;
+GLuint shadowModelLocation;
+//GLuint shadowViewProjectionLocation2;
+
+//terrain
+GLuint terrainTexture ;
+GLuint terrainTexture2 ;
+GLuint waterTexture ;
+GLuint waterTexture2 ;
+GLuint bottomTexture ;
+GLuint maskTexture;
+GLuint sunTexture;
+GLuint skyTexture;
+// tree
+GLuint trunkTexture ;
+GLuint needleTexture ;
+GLuint treeDiffuseTex2;
+GLuint chrysTexture;
+//bush
+GLuint bushTexture1;
+GLuint bushTexture2;
+GLuint bushTexture3;
+
+// locations for miniMapProgram
+//GLuint quadTextureSamplerLocation;
 
 
+// clouds
+CloudSystem* cloudSystem;
+
+//forest
+Forest* forest;
 
 // Creating a structure to store the material parameters of an object
 struct Material
@@ -57,88 +105,70 @@ struct Material
 	vec4 Ks;
 	float Ns;
 };
+struct TexLocations {
+	// terrain
+	GLuint terrainTex;
+	GLuint terrainTex2;
+	GLuint waterTex;
+	GLuint waterTex2;
+	GLuint bottomTex;
+	GLuint maskTex;
 
-// Global Variables
-GLFWwindow* window;
-Camera* camera;
-Light* light;
-Light* light2;
-GLuint shaderProgram, depthProgram, miniMapProgram;
-Drawable* model1;
-Drawable* sphere;
-Drawable* terrain;
-Drawable* plane;
-GLuint modelDiffuseTexture, modelSpecularTexture;
-GLuint depthFBO, depthTexture;
-GLuint depthFBO2, depthTexture2;
-GLuint lightDirectionLocation;
-// Global instance to hold your terrain data after loading
+	// vegetation
+	GLuint trunkTex;
+	GLuint needleTex;
+	GLuint needleTex2;
+	GLuint needleTex3;
 
-Drawable* quad;
+	// sky & sun
+	GLuint skyTex;
+	GLuint sunTex;
+};
 
-// tree
-Drawable* treeModel1; 
-Drawable* bushModel;
-GLuint treeDiffuseTex;
-GLuint treeDiffuseTex2;
-GLuint bushTexture1;
-GLuint bushTexture2;
-GLuint bushTexture3;
-GLuint chrysTexture;
-GLuint useInstancingLocation;
+struct Programs {
+	GLuint lighting = 0;
+	GLuint depth = 0;
+	GLuint miniMap = 0;
+};
 
+struct Uniforms {
+	// matrices
+	GLuint P = 0;
+	GLuint V = 0;
+	GLuint M = 0;
 
-// locations for shaderProgram
-GLuint scaling_factor_location;
-GLuint viewMatrixLocation;
-GLuint projectionMatrixLocation;
-GLuint modelMatrixLocation;
-GLuint KaLocation, KdLocation, KsLocation, NsLocation;
-GLuint LaLocation, LdLocation, LsLocation;
+	// material
+	GLuint Ka = 0;
+	GLuint Kd = 0;
+	GLuint Ks = 0;
+	GLuint Ns = 0;
 
-GLuint lightPositionLocation;
+	// light
+	GLuint La = 0;
+	GLuint Ld = 0;
+	GLuint Ls = 0;
+	GLuint lightDir = 0;
+	GLuint lightPos = 0;
 
-GLuint lightPowerLocation;
-GLuint diffuseColorSampler;
-GLuint specularColorSampler;
-GLuint useTextureLocation;
-GLuint depthMapSampler;
-GLuint lightVPLocation;
+	// rendering control
+	GLuint useTexture = 0;
+	GLuint useInstancing = 0;
+	GLuint uvScale = 0;
+	GLuint normDir = 0;
+	GLuint scalingFactor = 0;
 
+	// shadow
+	GLuint depthMap = 0;
+	GLuint lightVP = 0;
 
+	// samplers
+	GLuint diffuseSampler = 0;
+	GLuint specularSampler = 0;
+};
 
-//scale textures
-GLuint uvScaleLocation;
-
-
-
-// locations for depthProgram
-GLuint shadowViewProjectionLocation;
-GLuint shadowModelLocation;
-//GLuint shadowViewProjectionLocation2;
-
-GLuint terrainTexture ;
-GLuint terrainTexture2 ;
-GLuint waterTexture ;
-GLuint waterTexture2 ;
-GLuint bottomTexture ;
-GLuint maskTexture;
-GLuint sunTexture;
-GLuint skyTexture;
-// In winter.cpp
-GLuint trunkTexture ;
-GLuint needleTexture ;
-// locations for miniMapProgram
-GLuint quadTextureSamplerLocation;
-
-GLuint normDirLocation;
-
-// clouds
-CloudSystem* cloudSystem;
-
-//forest
-Forest* forest;
-
+Programs programs;
+Uniforms u;
+TexLocations t;
 
 // Create two sample materials
 const Material polishedSilver
@@ -157,16 +187,26 @@ const Material turquoise
 	12.8f
 };
 
+
+GLuint loadTextureRepeat(const std::string& path) {
+	GLuint tex = loadSOIL(path.c_str());
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	return tex;
+}
+
 // NOTE: Since the Light and Material struct are used in the shader programs as well 
 //		 it is recommended to create a function that will update all the parameters 
-//       of an object.
-// 
-// Creating a function to upload (make uniform) the light parameters to the shader program
+//       of an object.  // Creating a function to upload (make uniform) the light parameters to the shader program
+
 void uploadLight(const Light& light) {
-	glUniform4f(LaLocation, light.La.r, light.La.g, light.La.b, light.La.a);
-	glUniform4f(LdLocation, light.Ld.r, light.Ld.g, light.Ld.b, light.Ld.a);
-	glUniform4f(LsLocation, light.Ls.r, light.Ls.g, light.Ls.b, light.Ls.a);
-	glUniform3fv(lightDirectionLocation, 1,
+	glUniform4f(u.La, light.La.r, light.La.g, light.La.b, light.La.a);
+	glUniform4f(u.Ld, light.Ld.r, light.Ld.g, light.Ld.b, light.Ld.a);
+	glUniform4f(u.Ls, light.Ls.r, light.Ls.g, light.Ls.b, light.Ls.a);
+	glUniform3fv(u.lightDir, 1,
 		&light.direction[0]);
 	/*glUniform3f(lightPositionLocation, light.lightPosition_worldspace.x,
 		light.lightPosition_worldspace.y, light.lightPosition_worldspace.z);*/
@@ -174,15 +214,15 @@ void uploadLight(const Light& light) {
 
 // Creating a function to upload the material parameters of a model to the shader program
 void uploadMaterial(const Material& mtl) {
-	glUniform4f(KaLocation, mtl.Ka.r, mtl.Ka.g, mtl.Ka.b, mtl.Ka.a);
-	glUniform4f(KdLocation, mtl.Kd.r, mtl.Kd.g, mtl.Kd.b, mtl.Kd.a);
-	glUniform4f(KsLocation, mtl.Ks.r, mtl.Ks.g, mtl.Ks.b, mtl.Ks.a);
-	glUniform1f(NsLocation, mtl.Ns);
+	glUniform4f(u.Ka, mtl.Ka.r, mtl.Ka.g, mtl.Ka.b, mtl.Ka.a);
+	glUniform4f(u.Kd, mtl.Kd.r, mtl.Kd.g, mtl.Kd.b, mtl.Kd.a);
+	glUniform4f(u.Ks, mtl.Ks.r, mtl.Ks.g, mtl.Ks.b, mtl.Ks.a);
+	glUniform1f(u.Ns, mtl.Ns);
 }
 
 void setShaderMode(int mode, bool instanced = false) {
-	glUniform1i(useTextureLocation, mode);
-	glUniform1i(useInstancingLocation, instanced ? 1 : 0);
+	glUniform1i(u.useTexture, mode);
+	glUniform1i(u.useInstancing, instanced ? 1 : 0);
 	if (!instanced) {
 		// Automatically clean up attributes
 		for (int i = 4; i <= 8; i++) glDisableVertexAttribArray(i);
@@ -232,90 +272,67 @@ void createDepthFBOAndTexture(GLuint& fboID, GLuint& textureID) {
 void free() {
 	delete cloudSystem;
 	// Delete Shader Programs
-	glDeleteProgram(shaderProgram);
-	glDeleteProgram(depthProgram);
-	glDeleteProgram(miniMapProgram);
+	glDeleteProgram(programs.lighting);
+	glDeleteProgram(programs.depth);
 	delete forest;
 	glfwTerminate();
 }
 
 void createContext() {
+	programs.lighting = loadShaders("ShadowMapping.vertexshader", "ShadowMapping.fragmentshader");
+	programs.depth = loadShaders("Depth.vertexshader", "Depth.fragmentshader");
+	programs.miniMap = loadShaders("MiniMap.vertexshader", "MiniMap.fragmentshader");
+	glUseProgram(programs.lighting);
 
-	//glUniform1i(useInstancingLocation, 0);
-	// Create and compile our GLSL program from the shader
-	shaderProgram = loadShaders("ShadowMapping.vertexshader", "ShadowMapping.fragmentshader");
-
-	// Task 3.1 
-	// Create and load the shader program for the depth buffer construction
-	// You need to load and use the Depth.vertexshader, Depth.fragmentshader
-	depthProgram = loadShaders("Depth.vertexshader", "Depth.fragmentshader");
-
-
-	// Task 2.1
-	// Use the MiniMap.vertexshader, "MiniMap.fragmentshader"
-	miniMapProgram = loadShaders("MiniMap.vertexshader", "MiniMap.fragmentshader");
-
-
-	glUseProgram(shaderProgram); //
 
 	// THIS FIXED THE GIANT TREE ISSUE
 	/* =====================================================================================
 	====================================VERY IMPORTANT ====================================
 	=====================================================================================*/
-	useInstancingLocation = glGetUniformLocation(shaderProgram, "useInstancing");
-	glUniform1i(useInstancingLocation, 0);
+	u.useInstancing = glGetUniformLocation(programs.lighting, "useInstancing");
+	glUniform1i(u.useInstancing, 0);
 	// BEGIN WITH INSTANCING 0
 
 	// NOTE: Don't forget to delete the shader programs on the free() function
 
-
-
 	// Get pointers to uniforms
-	// --- shaderProgram ---
-	projectionMatrixLocation = glGetUniformLocation(shaderProgram, "P");
-	viewMatrixLocation = glGetUniformLocation(shaderProgram, "V");
-	modelMatrixLocation = glGetUniformLocation(shaderProgram, "M");
+	// --- programs.lighting ---
+	u.P = glGetUniformLocation(programs.lighting, "P");
+	u.V = glGetUniformLocation(programs.lighting, "V");
+	u.M = glGetUniformLocation(programs.lighting, "M");
 	// for phong lighting
-	KaLocation = glGetUniformLocation(shaderProgram, "mtl.Ka");
-	KdLocation = glGetUniformLocation(shaderProgram, "mtl.Kd");
-	KsLocation = glGetUniformLocation(shaderProgram, "mtl.Ks");
-	NsLocation = glGetUniformLocation(shaderProgram, "mtl.Ns");
-	LaLocation = glGetUniformLocation(shaderProgram, "light.La");
-	LdLocation = glGetUniformLocation(shaderProgram, "light.Ld");
-	LsLocation = glGetUniformLocation(shaderProgram, "light.Ls");
-	lightPositionLocation = glGetUniformLocation(shaderProgram, "light.lightPosition_worldspace");
-	//lightPositionLocation2 = glGetUniformLocation(shaderProgram, "light2.lightPosition_worldspace");
-	lightDirectionLocation =
-		glGetUniformLocation(shaderProgram, "lightDirection_worldspace");
-	//std::cout << "lightDirectionLocation: " << lightDirectionLocation << std::endl;
-	
-	diffuseColorSampler = glGetUniformLocation(shaderProgram, "diffuseColorSampler");
-	specularColorSampler = glGetUniformLocation(shaderProgram, "specularColorSampler");
-	scaling_factor_location= glGetUniformLocation(shaderProgram, "scaling_factor");
-	uvScaleLocation = glGetUniformLocation(shaderProgram, "uvScale"); // <-- new
+	u.Ka = glGetUniformLocation(programs.lighting, "mtl.Ka");
+	u.Kd = glGetUniformLocation(programs.lighting, "mtl.Kd");
+	u.Ks = glGetUniformLocation(programs.lighting, "mtl.Ks");
+	u.Ns = glGetUniformLocation(programs.lighting, "mtl.Ns");
 
+	u.La = glGetUniformLocation(programs.lighting, "light.La");
+	u.Ld = glGetUniformLocation(programs.lighting, "light.Ld");
+	u.Ls = glGetUniformLocation(programs.lighting, "light.Ls");
+
+	u.lightPos = glGetUniformLocation(programs.lighting, "light.lightPosition_worldspace");//lightPositionLocation2 = glGetUniformLocation(programs.lighting, "light2.lightPosition_worldspace");
+	u.lightDir = glGetUniformLocation(programs.lighting, "lightDirection_worldspace");
+	//std::cout << "u.lightDir: " << u.lightDir << std::endl;
 	
-	//hw 4
-	normDirLocation = glGetUniformLocation(shaderProgram, "normDir");
-	// Task 1.4
-	useTextureLocation = glGetUniformLocation(shaderProgram, "useTexture");
+	u.diffuseSampler = glGetUniformLocation(programs.lighting, "u.diffuseSampler");
+	u.specularSampler = glGetUniformLocation(programs.lighting, "u.specularSampler");
+	u.scalingFactor = glGetUniformLocation(programs.lighting, "scaling_factor");
+	u.uvScale = glGetUniformLocation(programs.lighting, "uvScale");
+	
+	u.normDir = glGetUniformLocation(programs.lighting, "normDir");
+	u.useTexture = glGetUniformLocation(programs.lighting, "useTexture");
 
 	// locations for shadow rendering
-	depthMapSampler = glGetUniformLocation(shaderProgram, "shadowMapSampler");
-	lightVPLocation = glGetUniformLocation(shaderProgram, "lightVP");
+	u.depthMap = glGetUniformLocation(programs.lighting, "shadowMapSampler");
+	u.lightVP = glGetUniformLocation(programs.lighting, "lightVP");
 
-	// --- depthProgram ---
-	shadowViewProjectionLocation = glGetUniformLocation(depthProgram, "VP");
-	shadowModelLocation = glGetUniformLocation(depthProgram, "M");
-	//shadowViewProjectionLocation2 = glGetUniformLocation(depthProgram, "VP2"); //hw2
-	// --- miniMapProgram ---
-	quadTextureSamplerLocation = glGetUniformLocation(miniMapProgram, "textureSampler");
+	// --- programs.depth ---
+	shadowViewProjectionLocation = glGetUniformLocation(programs.depth, "VP");
+	shadowModelLocation = glGetUniformLocation(programs.depth, "M");
+	//shadowViewProjectionLocation2 = glGetUniformLocation(programs.depth, "VP2"); //hw2
 
 	//cloud
-	//uvRotationLocation = glGetUniformLocation(shaderProgram, "uvRotationAngle");
-
-
-
+	//uvRotationLocation = glGetUniformLocation(programs.lighting, "uvRotationAngle");
 
 	// Loading a model
 	// The terrain object from Gaea is loaded as terrain
@@ -333,54 +350,36 @@ void createContext() {
 	// <=============== tree ========================>
 	// 
 	// Load tree models
-	// After glUseProgram(shaderProgram);
-	GLuint nodePositionsLocation = glGetUniformLocation(shaderProgram, "nodePositions");
-	if (nodePositionsLocation != -1) {
+	GLuint nodePositions = glGetUniformLocation(programs.lighting, "nodePositions");
+	if (nodePositions != -1) {
 		vec3 defaultNodes[4] = {
 			vec3(0, 0, 0),
 			vec3(0, 0, 0),
 			vec3(0, 0, 0),
 			vec3(0, 0, 0)
 		};
-		glUniform3fv(nodePositionsLocation, 4, &defaultNodes[0][0]);
+		glUniform3fv(nodePositions, 4, &defaultNodes[0][0]);
 	}
 	//tre oj
 	treeModel1 = new Drawable("assets/tree.obj");
 
 	// 3 tree textures
-	treeDiffuseTex2 = loadSOIL("assets/fir.jpg");
-	glBindTexture(GL_TEXTURE_2D, treeDiffuseTex2);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	treeDiffuseTex = loadSOIL("assets/tree2.jpg");
-	glBindTexture(GL_TEXTURE_2D, treeDiffuseTex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	
+	treeDiffuseTex2 = loadTextureRepeat("assets/fir.jpg");
 
-	chrysTexture = loadSOIL("assets/chrys.jpg"); //best?
-	glBindTexture(GL_TEXTURE_2D, chrysTexture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	chrysTexture = loadTextureRepeat("assets/chrys.jpg"); //best?
 
-	// tree
-	trunkTexture = loadSOIL("assets/bark.jpg");
-	glBindTexture(GL_TEXTURE_2D, trunkTexture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	//needleTexture = loadSOIL("assets/fir.jpg");
-	needleTexture = loadSOIL("assets/tree2.jpg");
-	glBindTexture(GL_TEXTURE_2D, needleTexture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	 
+	trunkTexture = loadTextureRepeat("assets/bark.jpg");
+
+	needleTexture = loadTextureRepeat("assets/tree2.jpg");
+
 	// FOREST SYSTEM
-	forest = new Forest(treeModel1, shaderProgram, 100); // 100 trees
+	forest = new Forest(treeModel1, programs.lighting, 100); // 100 trees
 	float scale = SCALING_FACTOR; // 200
 	forest->setTerrainBounds(
 		-scale / 2, scale / 2,  // X bounds
 		-scale / 2, scale / 2,  // Z bounds
 		0.0f, 50.0f,        // Y bounds
-		2.0f              // scaling factor //? the heightmap is already scaled
+		1.0f              // scaling factor //? the heightmap is already scaled
 	);
 	forest->loadTerrainBinary("assets/heightmap/terrain_data.bin");
 	// Generate tree positions
@@ -406,7 +405,7 @@ void createContext() {
 	/* CLOUD SYSTEM */
 	// Initialize cloud system
 	cloudSystem = new CloudSystem();
-	cloudSystem->initialize(shaderProgram);
+	cloudSystem->initialize(programs.lighting);
 
 	// Add some clouds
 	cloudSystem->addCloud(vec3(0, 20, -10), 5.0f);
@@ -415,32 +414,10 @@ void createContext() {
 	cloudSystem->addCloud(vec3(20, 52, -15), 5.5f);
 	cloudSystem->addCloud(vec3(-25, 90, 8), 3.0f);
 	
-
-	// Task 2.2: Creating a 2D quad to visualize the depthmap
-	// create geometry and vao for screen-space quad
-	vector<vec3> quadVertices = {
-	  vec3(0.5, 0.5, -1.0),
-	  vec3(1.0, 0.5, -1.0),
-	  vec3(1.0, 1.0, -1.0),
-	  vec3(1.0, 1.0, -1.0),
-	  vec3(0.5, 1.0, -1.0),
-	  vec3(0.5, 0.5, -1.0)
-	};
-
-	vector<vec2> quadUVs = {
-	  vec2(0.0, 0.0),
-	  vec2(1.0, 0.0),
-	  vec2(1.0, 1.0),
-	  vec2(1.0, 1.0),
-	  vec2(0.0, 1.0),
-	  vec2(0.0, 0.0)
-	};
-
-	quad = new Drawable(quadVertices, quadUVs);
 	createDepthFBOAndTexture(depthFBO, depthTexture);
 
 	// Homework 2: create second depth FBO and texture
-	createDepthFBOAndTexture(depthFBO2, depthTexture2);
+	/*createDepthFBOAndTexture(depthFBO2, depthTexture2);*/
 
 	/* load textures */
 	terrainTexture = loadSOIL("assets/aerial_rocks.bmp");
@@ -481,7 +458,31 @@ void createContext() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+	//cache texture locations
+	glUseProgram(programs.lighting);
 
+	// terrain
+	t.terrainTex = glGetUniformLocation(programs.lighting, "terrainTex");
+	t.terrainTex2 = glGetUniformLocation(programs.lighting, "terrainTex2");
+	t.waterTex = glGetUniformLocation(programs.lighting, "waterTex");
+	t.waterTex2 = glGetUniformLocation(programs.lighting, "waterTex2");
+	t.bottomTex = glGetUniformLocation(programs.lighting, "bottomTex");
+	t.maskTex = glGetUniformLocation(programs.lighting, "maskTex");
+
+	// vegetation
+	t.trunkTex = glGetUniformLocation(programs.lighting, "trunkTex");
+	t.needleTex = glGetUniformLocation(programs.lighting, "needleTex");
+	t.needleTex2 = glGetUniformLocation(programs.lighting, "needleTex2");
+	t.needleTex3 = glGetUniformLocation(programs.lighting, "needleTex3");
+
+	// sky / sun
+	t.skyTex = glGetUniformLocation(programs.lighting, "skyTex");
+	t.sunTex = glGetUniformLocation(programs.lighting, "sunTex");
+
+#define CHECK_TEX(x) if (x == -1) std::cout << "Missing sampler: " #x "\n";
+	CHECK_TEX(t.terrainTex);
+	CHECK_TEX(t.skyTex);
+	CHECK_TEX(t.sunTex);
 
 	
 	GLenum err = glGetError();
@@ -490,10 +491,11 @@ void createContext() {
 	}
 
 	// Check if critical uniforms were found:
-	if (lightDirectionLocation == -1) cout << "WARNING: lightDirection_worldspace not found!" << endl;
-	if (projectionMatrixLocation == -1) cout << "WARNING: P not found!" << endl;
-	if (viewMatrixLocation == -1) cout << "WARNING: V not found!" << endl;
-	if (modelMatrixLocation == -1) cout << "WARNING: M not found!" << endl;
+	if (u.lightDir == -1) cout << "WARNING: lightDirection_worldspace not found!" << endl;
+	if (u.P == -1) cout << "WARNING: P not found!" << endl;
+	if (u.V == -1) cout << "WARNING: V not found!" << endl;
+	if (u.M == -1) cout << "WARNING: M not found!" << endl;
+
 	//everything orange fix
 	//// CRITICAL: Disable instancing attributes for non-instanced rendering
 	//glDisableVertexAttribArray(4);
@@ -513,9 +515,9 @@ void createContext() {
 
 // Helper to reset common states to prevent leakage
 void resetDefaultStates() {
-	glUniform1i(useInstancingLocation, 0);
-	glUniform2f(uvScaleLocation, 1.0f, 1.0f);
-	glUniform1f(normDirLocation, 1.0f);
+	glUniform1i(u.useInstancing, 0);
+	glUniform2f(u.uvScale, 1.0f, 1.0f);
+	glUniform1f(u.normDir, 1.0f);
 
 	// Explicitly disable instancing attributes just in case
 	for (int i = 4; i <= 8; i++) glDisableVertexAttribArray(i);
@@ -526,10 +528,10 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glViewport(0, 0, screen_width, screen_height);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glUseProgram(shaderProgram);
+	glUseProgram(programs.lighting);
 
 	// CRITICAL: Ensure instancing is OFF before doing anything else
-	glUniform1i(useInstancingLocation, 0);
+	glUniform1i(u.useInstancing, 0);
 
 	// Now proceed with Sky Dome...
 	glDisable(GL_CULL_FACE);
@@ -538,9 +540,9 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glViewport(0, 0, screen_width, screen_height);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glUseProgram(shaderProgram);
-	glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
-	glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
+	glUseProgram(programs.lighting);
+	glUniformMatrix4fv(u.V, 1, GL_FALSE, &viewMatrix[0][0]);
+	glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
 
 	// 1. SKY DOME (Unlit, no shadows)
 	//sphere->bind();
@@ -549,15 +551,15 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glDepthFunc(GL_LEQUAL);
 	glDepthMask(GL_FALSE);
 
-	glUniform1i(useTextureLocation, 3); // Sky mode
-	glUniform1f(normDirLocation, -1.0f);
+	glUniform1i(u.useTexture, 3); // Sky mode
+	glUniform1f(u.normDir, -1.0f);
 
 	glActiveTexture(GL_TEXTURE7);
 	glBindTexture(GL_TEXTURE_2D, skyTexture);
-	glUniform1i(glGetUniformLocation(shaderProgram, "skyTex"), 7);
-	glUniform1i(useInstancingLocation, 0); //?
+	glUniform1i(t.skyTex, 7);
+	glUniform1i(u.useInstancing, 0); //?
 	mat4 skyM = translate(mat4(1.0f), camera->position) * scale(mat4(1.0f), vec3(30.0f));
-	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &skyM[0][0]);
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &skyM[0][0]);
 	sphere->bind();
 	sphere->draw();
 
@@ -566,26 +568,26 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glDepthMask(GL_TRUE);
 
 	// 2. LIGHTING GLOBALS
-	glUniform1i(useInstancingLocation, 0);
+	glUniform1i(u.useInstancing, 0);
 	uploadLight(*light);
 	mat4 lightVP = light->lightVP();
-	glUniformMatrix4fv(lightVPLocation, 1, GL_FALSE, &lightVP[0][0]);
-	glUniform3fv(lightDirectionLocation, 1, &light->direction[0]);
+	glUniformMatrix4fv(u.lightVP, 1, GL_FALSE, &lightVP[0][0]);
+	glUniform3fv(u.lightDir, 1, &light->direction[0]);
 
 	// Bind Shadow Map once to a high slot
 	glActiveTexture(GL_TEXTURE8);
 	glBindTexture(GL_TEXTURE_2D, depthTexture);
-	glUniform1i(depthMapSampler, 8);
+	glUniform1i(u.depthMap, 8);
 
 	// 3. TERRAIN
-	glUniform1i(useInstancingLocation, 0);
+	glUniform1i(u.useInstancing, 0);
 	resetDefaultStates();
-	glUniform1i(useTextureLocation, 1); // Terrain mode
+	glUniform1i(u.useTexture, 1); // Terrain mode
 
 	float repeats_on_surface = 600.0f;
 	float uvTile = repeats_on_surface / SCALING_FACTOR;
-	glUniform2f(uvScaleLocation, uvTile, uvTile);
-	glUniform1f(scaling_factor_location, SCALING_FACTOR);
+	glUniform2f(u.uvScale, uvTile, uvTile);
+	glUniform1f(u.scalingFactor, SCALING_FACTOR);
 
 	// Bind all terrain textures
 	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, terrainTexture);
@@ -594,100 +596,100 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, waterTexture2);
 	glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, bottomTexture);
 	glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, maskTexture);
-	glUniform1i(glGetUniformLocation(shaderProgram, "terrainTex"), 0);
-	glUniform1i(glGetUniformLocation(shaderProgram, "terrainTex2"), 1);
-	glUniform1i(glGetUniformLocation(shaderProgram, "waterTex"), 2);
-	glUniform1i(glGetUniformLocation(shaderProgram, "waterTex2"), 3);
-	glUniform1i(glGetUniformLocation(shaderProgram, "bottomTex"), 4);
-	glUniform1i(glGetUniformLocation(shaderProgram, "maskTex"), 5);
-	glUniform1f(glGetUniformLocation(shaderProgram, "time"), glfwGetTime());
+	glUniform1i(t.terrainTex, 0);
+	glUniform1i(t.terrainTex2, 1);
+	glUniform1i(t.waterTex, 2);
+	glUniform1i(t.waterTex2, 3);
+	glUniform1i(t.bottomTex, 4);
+	glUniform1i(t.maskTex, 5);
+	glUniform1f(glGetUniformLocation(programs.lighting, "time"), glfwGetTime());
 
-	mat4 terrainM = translate(mat4(), vec3(0.0f, -1.0f, -5.0f)) * scale(mat4(), vec3(SCALING_FACTOR));
-	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &terrainM[0][0]);
+	mat4 terrainM = translate(mat4(), vec3(0.0f, 0.5f, 0.0f)) * scale(mat4(), vec3(SCALING_FACTOR));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &terrainM[0][0]);
 	terrain->bind();
 	terrain->draw();
 
 	// 4. FOREST (Instanced) - FIXED VERSION
 	resetDefaultStates();
-	glUniform1i(useInstancingLocation, 1);
-	glUniform1i(useTextureLocation, 5); // Tree mode
-	glUniform2f(uvScaleLocation, 1.0f, 1.0f); // Reset UV scale for trees
+	glUniform1i(u.useInstancing, 1);
+	glUniform1i(u.useTexture, 5); // Tree mode
+	glUniform2f(u.uvScale, 1.0f, 1.0f); // Reset UV scale for trees
 
 	// CRITICAL FIX: Bind tree textures BEFORE drawing
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, trunkTexture);
-	glUniform1i(glGetUniformLocation(shaderProgram, "trunkTex"), 0);
+	glUniform1i(t.trunkTex, 0);
 
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, needleTexture);
-	glUniform1i(glGetUniformLocation(shaderProgram, "needleTex"), 1);
+	glUniform1i(t.needleTex, 1);
 
 	// Bind additional needle textures if you have them
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, treeDiffuseTex2); // fir.jpg
-	glUniform1i(glGetUniformLocation(shaderProgram, "needleTex2"), 2);
+	glUniform1i(t.needleTex2, 2);
 
 	glActiveTexture(GL_TEXTURE3);
 	glBindTexture(GL_TEXTURE_2D, chrysTexture); // chrys.jpg  
-	glUniform1i(glGetUniformLocation(shaderProgram, "needleTex3"), 3);
+	glUniform1i(t.needleTex3, 3);
 
 	forest->draw();
 
 	// CRITICAL: Properly disable instancing after forest
-	glUniform1i(useInstancingLocation, 0);
+	glUniform1i(u.useInstancing, 0);
 	for (int i = 4; i <= 8; i++) {
 		glDisableVertexAttribArray(i);
 	}
 
 	// 5. SUN (Emissive)
 	resetDefaultStates();
-	glUniform1i(useTextureLocation, 2); // Sun mode
-	glUniform1f(normDirLocation, -1.0f);
+	glUniform1i(u.useTexture, 2); // Sun mode
+	glUniform1f(u.normDir, -1.0f);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, sunTexture);
-	glUniform1i(glGetUniformLocation(shaderProgram, "sunTex"), 0);
+	glUniform1i(glGetUniformLocation(programs.lighting, "sunTex"), 0);
 
 	vec3 sunPos = vec3(35.0f, 50.0f, 20.0f);
 	mat4 sunM = translate(mat4(1.0f), sunPos) * scale(mat4(1.0f), vec3(0.9f));
-	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &sunM[0][0]);
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &sunM[0][0]);
 	sphere->bind();
 	sphere->draw();
 
 	// 6. BUSH
 	resetDefaultStates();
-	glUniform1i(useTextureLocation, 6); // Bush mode
+	glUniform1i(u.useTexture, 6); // Bush mode
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, bushTexture2);
-	glUniform1i(diffuseColorSampler, 0);
+	glUniform1i(u.diffuseSampler, 0);
 
-	mat4 bushM = translate(mat4(1.0f), vec3(22.0f, 3.0f, 20.0f)) * scale(mat4(1.0f), vec3(0.015f));
-	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &bushM[0][0]);
+	mat4 bushM = translate(mat4(1.0f), vec3(22.0f, 5.0f, 20.0f)) * scale(mat4(1.0f), vec3(0.015f));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &bushM[0][0]);
 	bushModel->bind();
 	bushModel->draw();
 
 	// 7. SUZANNE
 	resetDefaultStates();
-	glUniform1i(useTextureLocation, 1);
+	glUniform1i(u.useTexture, 1);
 	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, modelDiffuseTexture);
 	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, modelSpecularTexture);
-	glUniform1i(diffuseColorSampler, 0);
-	glUniform1i(specularColorSampler, 1);
+	glUniform1i(u.diffuseSampler, 0);
+	glUniform1i(u.specularSampler, 1);
 
 	mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
-	glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &suzanneM[0][0]);
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &suzanneM[0][0]);
 	model1->bind();
 	model1->draw();
 }
 
 void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
-	glUniform1i(useInstancingLocation, 0);  // Disable instancing for depth pass
+	glUniform1i(u.useInstancing, 0);  // Disable instancing for depth pass
 
 	glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
 	glBindFramebuffer(GL_FRAMEBUFFER, depthFBO);
 	glClear(GL_DEPTH_BUFFER_BIT);
 
-	glUseProgram(depthProgram);
+	glUseProgram(programs.depth);
 
 	mat4 view_projection = projectionMatrix * viewMatrix;
 	glUniformMatrix4fv(shadowViewProjectionLocation, 1, GL_FALSE, &view_projection[0][0]);
@@ -695,11 +697,11 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 	// Terrain model matrix
 	//mat4 modelMatrix = translate(mat4(), vec3(0.0f, -1.0f, -5.0f));
 	//glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &modelMatrix[0][0]);
-	float scaling_factor = SCALING_FACTOR;
-	mat4 modelMatrix = translate(mat4(), vec3(0.0f, -1.0f, -5.0f)) * scale(mat4(), vec3(scaling_factor, scaling_factor, scaling_factor));
-	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &modelMatrix[0][0]);
-	terrain->bind();
-	terrain->draw();
+	//float scaling_factor = SCALING_FACTOR;
+	//mat4 modelMatrix = translate(mat4(), vec3(0.0f, -1.0f, -5.0f)) * scale(mat4(), vec3(scaling_factor, scaling_factor, scaling_factor));
+	//glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &modelMatrix[0][0]);
+	//terrain->bind();
+	//terrain->draw();
 
 	// Use the same model matrix used in the lighting pass
 	//mat4 treeM = translate(mat4(1.0f), vec3(10.0f, 0.0f, 10.0f)) * scale(mat4(1.0f), vec3(0.5f));
@@ -711,13 +713,13 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 	//treeModel1->draw();
 
 	// Draw forest in shadow pass
-	glUniform1i(useInstancingLocation, 1);  // Enable instancing
+	glUniform1i(u.useInstancing, 1);  // Enable instancing
 	forest->draw();
-	glUniform1i(useInstancingLocation, 0);  // Disable 
+	glUniform1i(u.useInstancing, 0);  // Disable 
 
 	// Reset to standard texturing for Suzanne and others
-	glUniform1i(useTextureLocation, 1);
-	glUniform2f(uvScaleLocation, 1.0f, 1.0f);
+	glUniform1i(u.useTexture, 1);
+	glUniform2f(u.uvScale, 1.0f, 1.0f);
 	// Render suzanne in shadow pass
 	mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
 	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &suzanneM[0][0]);
@@ -727,21 +729,6 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
-// Task 2.3: visualize the depth_map on a sub-window at the top of the screen
-void renderMiniMap() {
-	// using the correct shaders to visualize the depth texture on the quad
-	glUseProgram(miniMapProgram);
-
-	//enabling the texture - follow the aforementioned pipeline
-	glActiveTexture(GL_TEXTURE0); //gia allon shader apo prin to GL_TEXTURE0
-	glBindTexture(GL_TEXTURE_2D, depthTexture);
-	glUniform1i(quadTextureSamplerLocation, 0);
-	// Drawing the quad
-	quad->bind();
-	quad->draw();
-}
-
-
 
 void mainLoop() {
 	float lastTime = glfwGetTime();
@@ -835,9 +822,9 @@ void mainLoop() {
 
 		//*/
 		// Render clouds
-		glUseProgram(shaderProgram);
-		glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, &viewMatrix[0][0]);
-		glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
+		glUseProgram(programs.lighting);
+		glUniformMatrix4fv(u.V, 1, GL_FALSE, &viewMatrix[0][0]);
+		glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
 		cloudSystem->render(viewMatrix, projectionMatrix);
 		// Task 2.2:
 		//renderMiniMap();
