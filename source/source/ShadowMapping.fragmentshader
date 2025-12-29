@@ -36,6 +36,9 @@ uniform sampler2D sunTex;
 // treee
 uniform sampler2D trunkTex;   // Slot 0 (Bark JPG)
 uniform sampler2D needleTex;  // Slot 1 (Needle PNG)
+uniform sampler2D needleTex2;  // Second needle texture
+uniform sampler2D needleTex3;  // Third needle texture (optional)
+// ===========================================================
 uniform sampler2D diffuseColorSampler; // Slot 2 (Bush PNG)
 //uniform sampler2D barkSampler;    //  (Slot 0)
 //uniform sampler2D needleSampler;  //  (Slot 1)
@@ -43,9 +46,7 @@ uniform sampler2D diffuseColorSampler; // Slot 2 (Bush PNG)
 // =================================================
 flat in int textureIndex;
 // =================================================
-uniform sampler2D needleTex2;  // Second needle texture
-uniform sampler2D needleTex3;  // Third needle texture (optional)
-// ===========================================================
+
 
 // light properties
 struct Light {
@@ -338,7 +339,7 @@ if (useTexture == 5) {
             discard;
 
         _Kd.rgb = texColor.rgb;
-        _Ka.rgb = 0.4 * _Kd.rgb; // boost beacuse bush is just 3 planes
+        _Ka.rgb = 0.45 * _Kd.rgb; // boost beacuse bush is just 3 planes
         _Ks.rgb = vec3(0.05);
         _Ns = 4.0;
     }

@@ -46,7 +46,7 @@ void free();
 GLFWwindow* window;
 Camera* camera;
 Light* light;
-Light* light2;
+//Light* light2;
 Drawable* model1;
 Drawable* sphere;
 Drawable* terrain;
@@ -61,6 +61,7 @@ Drawable* quad;
 // tree
 Drawable* treeModel1; 
 Drawable* bushModel;
+Drawable* deerModel;
 
 GLuint lightPowerLocation;
 
@@ -87,7 +88,8 @@ GLuint chrysTexture;
 GLuint bushTexture1;
 GLuint bushTexture2;
 GLuint bushTexture3;
-
+//deer
+GLuint deerTexture;
 // locations for miniMapProgram
 //GLuint quadTextureSamplerLocation;
 
@@ -106,6 +108,7 @@ struct Material
 	vec4 Ks;
 	float Ns;
 };
+
 struct TexLocations {
 	// terrain
 	GLuint terrainTex;
@@ -170,23 +173,6 @@ struct Uniforms {
 Programs programs;
 Uniforms u;
 TexLocations t;
-
-// Create two sample materials
-const Material polishedSilver
-{
-	vec4{0.23125, 0.23125, 0.23125, 1},
-	vec4{0.2775, 0.2775, 0.2775, 1},
-	vec4{0.773911, 0.773911, 0.773911, 1},
-	89.6f
-};
-
-const Material turquoise
-{
-	vec4{ 0.1, 0.18725, 0.1745, 0.8 },
-	vec4{ 0.396, 0.74151, 0.69102, 0.8 },
-	vec4{ 0.297254, 0.30829, 0.306678, 0.8 },
-	12.8f
-};
 
 
 GLuint loadTextureRepeat(const std::string& path) {
@@ -344,6 +330,11 @@ void createContext() {
 	//model1 = new Drawable("suzanne.obj");
 	//modelDiffuseTexture = loadSOIL("suzanne_diffuse.bmp");
 	//modelSpecularTexture = loadSOIL("suzanne_specular.bmp");
+
+	// Load deer model
+	deerModel = new Drawable("assets/deer.obj");
+	// deer texture
+	deerTexture = loadSOIL("assets/deer_colored.png");
 
 	// model2 (sphere) is used for light visualization, keep loading it
 	sphere = new Drawable("earth.obj");
@@ -665,7 +656,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glBindTexture(GL_TEXTURE_2D, bushTexture2);
 	glUniform1i(u.diffuseSampler, 0);
 
-	mat4 bushM = translate(mat4(1.0f), vec3(22.0f, 5.0f, 20.0f)) * scale(mat4(1.0f), vec3(0.015f));
+	mat4 bushM = translate(mat4(1.0f), vec3(22.0f, 4.0f, 20.0f)) * scale(mat4(1.0f), vec3(0.03f, 0.02f, 0.03f)); //anisotropic scaling 
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &bushM[0][0]);
 	bushModel->bind();
 	bushModel->draw();
@@ -682,6 +673,19 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	//glUniformMatrix4fv(u.M, 1, GL_FALSE, &suzanneM[0][0]);
 	//model1->bind();
 	//model1->draw();
+
+	//8. DEER 
+	//LOAD DEER OBJECT 
+	resetDefaultStates();
+	glUniform1i(u.useTexture, 6); // Bush & Deer mode
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, deerTexture);
+	glUniform1i(u.diffuseSampler, 0);
+
+	mat4 deerM = translate(mat4(1.0f), vec3(22.0f, 5.0f, 22.0f)) * scale(mat4(1.0f), vec3(1.0f));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &deerM[0][0]);
+	deerModel->bind();
+	deerModel->draw();
 }
 
 void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
@@ -839,7 +843,6 @@ void mainLoop() {
 
 }
 
-
 void initialize() {
 	// Initialize GLFW
 	if (!glfwInit()) {
@@ -964,3 +967,20 @@ int main(void) {
 
 	return 0;
 }
+
+// Create two sample materials
+//const Material polishedSilver
+//{
+//	vec4{0.23125, 0.23125, 0.23125, 1},
+//	vec4{0.2775, 0.2775, 0.2775, 1},
+//	vec4{0.773911, 0.773911, 0.773911, 1},
+//	89.6f
+//};
+//
+//const Material turquoise
+//{
+//	vec4{ 0.1, 0.18725, 0.1745, 0.8 },
+//	vec4{ 0.396, 0.74151, 0.69102, 0.8 },
+//	vec4{ 0.297254, 0.30829, 0.306678, 0.8 },
+//	12.8f
+//};
