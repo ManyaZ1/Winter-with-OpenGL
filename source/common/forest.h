@@ -58,7 +58,8 @@ private:
     // Terrain data
     std::vector<float> heightData;
     std::vector<float> lakeMask;
-    std::vector<float> mountainMask;
+    //std::vector<float> mountainMask;
+    std::vector<float> forestMask;
     int gridResolution;
     float scalingFactor;
 

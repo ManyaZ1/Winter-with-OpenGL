@@ -339,10 +339,10 @@ void createContext() {
 	std::string modelPath = "assets/Mesher_LOD3.obj";
 	terrain = new Drawable(modelPath);
 
-	// Load suzanne model with textures for shadow demonstration
-	model1 = new Drawable("suzanne.obj");
-	modelDiffuseTexture = loadSOIL("suzanne_diffuse.bmp");
-	modelSpecularTexture = loadSOIL("suzanne_specular.bmp");
+	//// Load suzanne model with textures for shadow demonstration
+	//model1 = new Drawable("suzanne.obj");
+	//modelDiffuseTexture = loadSOIL("suzanne_diffuse.bmp");
+	//modelSpecularTexture = loadSOIL("suzanne_specular.bmp");
 
 	// model2 (sphere) is used for light visualization, keep loading it
 	sphere = new Drawable("earth.obj");
@@ -668,18 +668,18 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	bushModel->bind();
 	bushModel->draw();
 
-	// 7. SUZANNE
-	resetDefaultStates();
-	glUniform1i(u.useTexture, 1);
-	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, modelDiffuseTexture);
-	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, modelSpecularTexture);
-	glUniform1i(u.diffuseSampler, 0);
-	glUniform1i(u.specularSampler, 1);
+	//// 7. SUZANNE
+	//resetDefaultStates();
+	//glUniform1i(u.useTexture, 1);
+	//glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, modelDiffuseTexture);
+	//glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, modelSpecularTexture);
+	//glUniform1i(u.diffuseSampler, 0);
+	//glUniform1i(u.specularSampler, 1);
 
-	mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
-	glUniformMatrix4fv(u.M, 1, GL_FALSE, &suzanneM[0][0]);
-	model1->bind();
-	model1->draw();
+	//mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
+	//glUniformMatrix4fv(u.M, 1, GL_FALSE, &suzanneM[0][0]);
+	//model1->bind();
+	//model1->draw();
 }
 
 void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
@@ -720,12 +720,12 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 	// Reset to standard texturing for Suzanne and others
 	glUniform1i(u.useTexture, 1);
 	glUniform2f(u.uvScale, 1.0f, 1.0f);
-	// Render suzanne in shadow pass
-	mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
-	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &suzanneM[0][0]);
-	
-	model1->bind();
-	model1->draw();
+	//// Render suzanne in shadow pass
+	//mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
+	//glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &suzanneM[0][0]);
+	//
+	//model1->bind();
+	//model1->draw();
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }

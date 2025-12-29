@@ -11,6 +11,7 @@ OUT_DIR = "C:/Users/USER/Documents/GitHub/Winter-with-OpenGL/source/source/asset
 
 GRID_RESOLUTION = 1024          # 1024x1024 heightmap
 SCALING_FACTOR  = 200.0         # same as C++
+MASK_PATH = "C:/Users/USER/Documents/GitHub/Winter-with-OpenGL/source/source/assets/tree_density.png"
 # ==========================================
 
 
@@ -49,6 +50,8 @@ def main():
 
     print("Generating heightfield...")
     heightmap = np.full((GRID_RESOLUTION, GRID_RESOLUTION), -np.inf, dtype=np.float32)
+
+
 
     # Rasterize vertices into grid (max height wins)
     for x, y, z in verts:
@@ -98,6 +101,16 @@ def main():
             "max_y": float(h_max)
         }
     }
+    #FOREST MASK
+    forest_img = Image.open(MASK_PATH).convert("L").resize(
+        (GRID_RESOLUTION, GRID_RESOLUTION),
+        Image.BILINEAR
+    )
+
+    forest_mask = np.array(forest_img, dtype=np.float32) / 255.0
+
+    # Optional: hard threshold (recommended)
+    forest_mask = (forest_mask > 0.5).astype(np.float32)
 
     with open(os.path.join(OUT_DIR, "terrain_meta.json"), "w") as f:
         json.dump(meta, f, indent=4)
@@ -108,10 +121,7 @@ def main():
     output_file = os.path.join(OUT_DIR, "terrain_data.bin")
     
     with open(output_file, "wb") as f:
-        # 1. Header: Resolution (int), Scaling (float), Bounds (6 floats)
-        # Format string: i (int), f (float)
-        # i f f f f f f f
-        # Format string: i (1 int), ffffff (7 floats)
+        # 1. Header (8 values)
         header = struct.pack("ifffffff", 
             GRID_RESOLUTION, 
             SCALING_FACTOR,
@@ -121,13 +131,15 @@ def main():
         )
         f.write(header)
 
-        # 2. Body: Raw float32 buffers
+        # 2. Body: Raw float32 buffers in a clean, specific order
+        # HEIGHTMAP (Block 1)
         f.write(heightmap.astype(np.float32).tobytes())
+        # FOREST MASK (Block 2)
+        f.write(forest_mask.astype(np.float32).tobytes())
+        # LAKE MASK (Block 3)
         f.write(lake_mask.astype(np.float32).tobytes())
-        f.write(mountain_mask.astype(np.float32).tobytes())
 
     print(f"Exported all terrain data to {output_file}")
-
 
 if __name__ == "__main__":
     main()

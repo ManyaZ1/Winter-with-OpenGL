@@ -5,7 +5,7 @@
 #include <fstream>
 // Height constraints for tree placement
 static constexpr float TREE_MIN_HEIGHT = 3.0f;//8.0f;
-static constexpr float TREE_MAX_HEIGHT = 28.0f;// Raised from 28.0
+static constexpr float TREE_MAX_HEIGHT = 20.0f;// Raised from 28.0
 
 Forest::Forest(Drawable* model, GLuint shaderID, int count)
     : treeModel(model), shader(shaderID), targetInstanceCount(count)
@@ -54,10 +54,8 @@ bool Forest::loadTerrainBinary(const std::string& filePath) {
         std::cerr << "Error: Could not open terrain file: " << filePath << std::endl;
         return false;
     }
-
     try {
-        // 1. Read Header (matching Python's "ifffffff")
-        // Order: res, scale, minX, maxX, minZ, maxZ, min_h, max_h
+        // 1. Read Header (Matches Python "ifffffff")
         file.read(reinterpret_cast<char*>(&gridResolution), sizeof(int));
         file.read(reinterpret_cast<char*>(&scalingFactor), sizeof(float));
         file.read(reinterpret_cast<char*>(&minX), sizeof(float));
@@ -67,52 +65,88 @@ bool Forest::loadTerrainBinary(const std::string& filePath) {
         file.read(reinterpret_cast<char*>(&minY), sizeof(float));
         file.read(reinterpret_cast<char*>(&maxY), sizeof(float));
 
-        // 2. Prepare memory buffers
         size_t numElements = static_cast<size_t>(gridResolution) * gridResolution;
         heightData.assign(numElements, 0.0f);
+        forestMask.assign(numElements, 0.0f);
         lakeMask.assign(numElements, 0.0f);
-        mountainMask.assign(numElements, 0.0f);
 
-        // 3. Read raw float buffers sequentially
-        // Read Heightmap
-        file.read(reinterpret_cast<char*>(heightData.data()), numElements * sizeof(float));
+        // 2. Read raw float buffers SEQUENTIALLY (Must match Python order!)
+        file.read(reinterpret_cast<char*>(heightData.data()), numElements * sizeof(float)); // Block 1
+        file.read(reinterpret_cast<char*>(forestMask.data()), numElements * sizeof(float)); // Block 2
+        file.read(reinterpret_cast<char*>(lakeMask.data()), numElements * sizeof(float)); // Block 3
 
-        // Read Lake Mask
-        file.read(reinterpret_cast<char*>(lakeMask.data()), numElements * sizeof(float));
-
-        // Read Mountain Mask
-        file.read(reinterpret_cast<char*>(mountainMask.data()), numElements * sizeof(float));
-
-        if (file.fail()) {
-            throw std::runtime_error("File stream failed during data read. File might be truncated.");
-        }
-
-        std::cout << "Successfully loaded terrain: " << gridResolution << "x" << gridResolution << std::endl;
-        std::cout << "Bounds X: [" << minX << ", " << maxX << "] Y: [" << minY << ", " << maxY << "]" << std::endl;
-
+        if (file.fail()) throw std::runtime_error("File read failed.");
     }
     catch (const std::exception& e) {
-        std::cerr << "Exception while loading terrain: " << e.what() << std::endl;
+        std::cerr << "Error: " << e.what() << std::endl;
         file.close();
         return false;
     }
-
     file.close();
     return true;
 }
+//    try {
+//        // 1. Read Header (matching Python's "ifffffff")
+//        // Order: res, scale, minX, maxX, minZ, maxZ, min_h, max_h
+//        file.read(reinterpret_cast<char*>(&gridResolution), sizeof(int));
+//        file.read(reinterpret_cast<char*>(&scalingFactor), sizeof(float));
+//        file.read(reinterpret_cast<char*>(&minX), sizeof(float));
+//        file.read(reinterpret_cast<char*>(&maxX), sizeof(float));
+//        file.read(reinterpret_cast<char*>(&minZ), sizeof(float));
+//        file.read(reinterpret_cast<char*>(&maxZ), sizeof(float));
+//        file.read(reinterpret_cast<char*>(&minY), sizeof(float));
+//        file.read(reinterpret_cast<char*>(&maxY), sizeof(float));
+//
+//        // 2. Prepare memory buffers
+//        size_t numElements = static_cast<size_t>(gridResolution) * gridResolution;
+//        heightData.assign(numElements, 0.0f);
+//        //lakeMask.assign(numElements, 0.0f);
+//        //mountainMask.assign(numElements, 0.0f);
+//        forestMask.assign(numElements, 0.0f);
+//        
+//
+//        // 3. Read raw float buffers sequentially
+//        // Read Heightmap
+//        file.read(reinterpret_cast<char*>(heightData.data()), numElements * sizeof(float));
+//        // READ FOREST
+//        file.read(reinterpret_cast<char*>(forestMask.data()),
+//            numElements * sizeof(float));
+//        // Read Lake Mask
+//        //file.read(reinterpret_cast<char*>(lakeMask.data()), numElements * sizeof(float));
+//
+//        // Read Mountain Mask
+//        //file.read(reinterpret_cast<char*>(mountainMask.data()), numElements * sizeof(float));
+//
+//        if (file.fail()) {
+//            throw std::runtime_error("File stream failed during data read. File might be truncated.");
+//        }
+//
+//        std::cout << "Successfully loaded terrain: " << gridResolution << "x" << gridResolution << std::endl;
+//        std::cout << "Bounds X: [" << minX << ", " << maxX << "] Y: [" << minY << ", " << maxY << "]" << std::endl;
+//
+//    }
+//    catch (const std::exception& e) {
+//        std::cerr << "Exception while loading terrain: " << e.what() << std::endl;
+//        file.close();
+//        return false;
+//    }
+//
+//    file.close();
+//    return true;
+//}
 
 void Forest::loadHeightData(const std::vector<float>& heights, int resolution) {
     heightData = heights;
     gridResolution = resolution;
 }
 
-void Forest::loadLakeMask(const std::vector<float>& mask) {
-    lakeMask = mask;
-}
-
-void Forest::loadMountainMask(const std::vector<float>& mask) {
-    mountainMask = mask;
-}
+//void Forest::loadLakeMask(const std::vector<float>& mask) {
+//    lakeMask = mask;
+//}
+//
+//void Forest::loadMountainMask(const std::vector<float>& mask) {
+//    mountainMask = mask;
+//}
 
 float Forest::sampleHeight(float x, float z) const {
     if (heightData.empty()) {
@@ -158,9 +192,9 @@ float Forest::sampleMask(const std::vector<float>& mask, float x, float z) const
 bool Forest::isValidPlacement(float x, float z, float y) const {
     // Debug: print rejection reasons for first few attempts
     static int debugCount = 0;
-    bool shouldDebug = (debugCount < 10);
+    bool shouldDebug = 1;//(debugCount < 10);
 
-    if (y < TREE_MIN_HEIGHT) {
+    if (y <= TREE_MIN_HEIGHT) {
         if (shouldDebug) {
             std::cout << "Rejected: y=" << y << " < min=" << TREE_MIN_HEIGHT << std::endl;
             debugCount++;
@@ -176,6 +210,24 @@ bool Forest::isValidPlacement(float x, float z, float y) const {
         return false;
     }
 
+    float forestVal = sampleMask(forestMask, x, z);
+    /*if (forestVal > 0.5f)
+        return false;*/
+    if (forestVal > 0.5f) {
+        // We are OUTSIDE the mask (on a mountain/plain)
+        // Introduce a random chance (e.g., 2% chance to keep the tree)
+        float randomRoll = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+        if (randomRoll > 0.02f) { // 98% of trees outside the mask are rejected
+            return false;
+        }
+        // "lucky" stray tree!
+    }
+    std::cout << "x=" << x
+        << " z=" << z
+        << " u=" << (x - minX) / (maxX - minX)
+        << " v=" << (z - minZ) / (maxZ - minZ)
+        << " mask=" << forestVal << std::endl;
+
     float lakeMaskVal = sampleMask(lakeMask, x, z);
     if (!lakeMask.empty() && lakeMaskVal > 0.5f) {
         if (shouldDebug) {
@@ -184,8 +236,8 @@ bool Forest::isValidPlacement(float x, float z, float y) const {
         }
         return false;
     }
-
-    float mountainMaskVal = sampleMask(mountainMask, x, z);
+/*
+    float mountainMaskVal = sampleMask(mountainMask, x, z);*/
     /*if (!mountainMask.empty() && mountainMaskVal > 0.5f) {
         if (shouldDebug) {
             std::cout << "Rejected: mountain mask=" << mountainMaskVal << std::endl;
@@ -236,8 +288,9 @@ void Forest::generate() {
     std::cout << "Generating trees..." << std::endl;
     std::cout << "Height data available: " << !heightData.empty() << std::endl;
     std::cout << "Lake mask available: " << !lakeMask.empty() << std::endl;
-    std::cout << "Mountain mask available: " << !mountainMask.empty() << std::endl;
-    
+   // std::cout << "Mountain mask available: " << !mountainMask.empty() << std::endl;
+	std::cout << "Forest mask available: " << !forestMask.empty() << std::endl;
+
     while ((int)instances.size() < targetInstanceCount && attempts < maxAttempts) {
         //std::cout << (int)instances.size() << "attempts" << attempts << std::endl;
         attempts++;
