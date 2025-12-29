@@ -1,0 +1,146 @@
+#version 330 core
+
+// Inputs from Vertex Shader
+in vec4 vertex_position_cameraspace;
+in vec4 vertex_normal_cameraspace;
+in vec3 lightDir_cameraspace;
+in vec2 vertex_UV;
+in vec2 vertex_UV_tiled;
+in vec4 vertex_position_lightspace;
+in vec3 fragPos_modelspace;
+flat in int textureIndex;
+
+// Texture Samplers
+uniform sampler2D shadowMapSampler;
+uniform sampler2D skyTex;
+uniform sampler2D sunTex;
+uniform sampler2D terrainTex;
+uniform sampler2D terrainTex2;
+uniform sampler2D waterTex;
+uniform sampler2D waterTex2;
+uniform sampler2D bottomTex;
+uniform sampler2D maskTex;
+uniform sampler2D trunkTex;
+uniform sampler2D needleTex;
+uniform sampler2D needleTex2;
+uniform sampler2D diffuseColorSampler;
+
+// Uniforms
+uniform int useTexture;
+uniform float time;
+uniform float uvRotationAngle;
+
+struct Light {
+    vec4 La; vec4 Ld; vec4 Ls;
+    vec3 lightPosition_worldspace;
+};
+uniform Light light;
+
+struct Material {
+    vec4 Ka; vec4 Kd; vec4 Ks;
+    float Ns;
+};
+uniform Material mtl;
+
+out vec4 fragmentColor;
+
+// Shadow PCF Logic
+float ShadowCalculation(vec4 fragPosLight, sampler2D sm) {
+    vec3 projCoords = fragPosLight.xyz / fragPosLight.w;
+    projCoords = projCoords * 0.5 + 0.5;
+    
+    if(projCoords.z > 1.0) return 0.0;
+
+    float currentDepth = projCoords.z;
+    // Bias to prevent shadow acne
+    float bias = max(0.005 * (1.0 - dot(normalize(vertex_normal_cameraspace.xyz), lightDir_cameraspace)), 0.0005);
+
+    float shadow = 0.0;
+    vec2 texelSize = 1.0 / textureSize(sm, 0);
+    for(int x = -1; x <= 1; ++x) {
+        for(int y = -1; y <= 1; ++y) {
+            float pcfDepth = texture(sm, projCoords.xy + vec2(x, y) * texelSize).r;
+            shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
+        }
+    }
+    return shadow / 9.0;
+}
+
+void main() {
+    // MODE 2: SUN (Emissive)
+    if (useTexture == 2) {
+        fragmentColor = vec4(texture(sunTex, vertex_UV).rgb, 1.0);
+        return;
+
+    }
+
+    // MODE 3: SKY (Spherical)
+    if (useTexture == 3) {
+        vec3 p = normalize(fragPos_modelspace);
+        float u = atan(p.z, p.x) / (2.0 * 3.14159) + 0.5;
+        float v = asin(clamp(p.y, -1.0, 1.0)) / 3.14159 + 0.5;
+        fragmentColor = vec4(texture(skyTex, vec2(fract(u), v)).rgb, 1.0);
+        return;
+    }
+
+    // MODE 4: BILLBOARD CLOUDS
+    if (useTexture == 4) {
+        float cosA = cos(uvRotationAngle);
+        float sinA = sin(uvRotationAngle);
+        vec2 rotatedUV = (vertex_UV - 0.5) * mat2(cosA, -sinA, sinA, cosA) + 0.5;
+        vec4 color = texture(sunTex, rotatedUV);
+        if (color.a < 0.1) discard;
+        fragmentColor = color;
+        return;
+    }
+
+    // Shared Visibility Calculation
+    float shadow = ShadowCalculation(vertex_position_lightspace, shadowMapSampler);
+    float visibility = 1.0 - shadow;
+
+    // Default Material Parameters
+    vec4 _Ka = mtl.Ka; vec4 _Kd = mtl.Kd; vec4 _Ks = mtl.Ks; float _Ns = mtl.Ns;
+
+    // MODE 1: TERRAIN
+    if (useTexture == 1) {
+        vec3 terrain = mix(texture(terrainTex, vertex_UV_tiled).rgb, texture(terrainTex2, vertex_UV_tiled).rgb, 0.3);
+        vec3 water = mix(texture(waterTex, vertex_UV + time*0.005).rgb, texture(waterTex2, vertex_UV - time*0.004).rgb, 0.5);
+        float lake = texture(maskTex, vertex_UV).r;
+        _Kd.rgb = mix(terrain, water, lake);
+        _Ns = 20.0;
+    }
+    // MODE 5: INSTANCED TREES
+    else if (useTexture == 5) {
+        if (vertex_UV.x < 0.5) {
+            _Kd.rgb = texture(trunkTex, vec2(vertex_UV.x * 2.0, vertex_UV.y) * 6.0).rgb;
+        } else {
+            vec2 leafUV = vec2((vertex_UV.x - 0.5) * 2.0, vertex_UV.y) * 8.0;
+            vec4 leafCol = (textureIndex == 0) ? texture(needleTex, leafUV) : texture(needleTex2, leafUV);
+            if (leafCol.a < 0.1) discard;
+            _Kd.rgb = leafCol.rgb;
+        }
+        // Accumulate snow on tops
+        float snow = pow(clamp(normalize(vertex_normal_cameraspace.y), 0.0, 1.0), 4.0);
+        _Kd.rgb = mix(_Kd.rgb, vec3(0.95, 0.95, 1.0), snow * 0.7);
+    }
+    // MODE 6: BUSH
+    else if (useTexture == 6) {
+        vec4 bush = texture(diffuseColorSampler, vertex_UV);
+        if (bush.a < 0.1) discard;
+        _Kd.rgb = bush.rgb;
+    }
+
+    // PHONG LIGHTING CALCULATION
+    vec4 N = normalize(vertex_normal_cameraspace);
+    vec4 L = normalize(vec4(lightDir_cameraspace, 0.0));
+    float cosTheta = clamp(dot(N, L), 0.0, 1.0);
+    vec4 R = reflect(-L, N);
+    vec4 E = normalize(vec4(0,0,0,1) - vertex_position_cameraspace);
+    float spec = pow(clamp(dot(E, R), 0.0, 1.0), _Ns);
+
+    vec3 ambient = (light.La * _Ka).rgb;
+    vec3 diffuse = (light.Ld * _Kd * cosTheta).rgb;
+    vec3 specular = (light.Ls * _Ks * spec).rgb;
+
+    fragmentColor = vec4(ambient + visibility * (diffuse + specular), 1.0);
+}
