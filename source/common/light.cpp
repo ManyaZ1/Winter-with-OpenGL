@@ -21,18 +21,21 @@ Light::Light(GLFWwindow* window,
              glm::vec4 init_La,
              glm::vec4 init_Ld,
              glm::vec4 init_Ls,
-             glm::vec3 init_direction) : window(window) {
+             glm::vec3 init_direction,
+             float radius_in) : window(window) {
     La = init_La;
     Ld = init_Ld;
     Ls = init_Ls;
     nearPlane = 1.0f;
     farPlane = 300.0f;
+    radius		= radius_in;
     // Directional light → direction is what matters
     // Treat input as "sun position hint"
     lightPosition_worldspace = init_direction;
 
     // Direction points FROM sun TOWARDS scene
-    direction = normalize(lightPosition_worldspace);
+    direction = normalize(init_direction); 
+	sun_pos = -direction * radius;
     //lightPosition_worldspace = init_position;
 
     // setting near and far plane affects the detail of the shadow
@@ -83,10 +86,10 @@ void Light::update()
 
     // --- SUN POSITION (FOR VISUALIZATION ONLY) ---
     glm::vec3 sceneCenter = glm::vec3(0.0f, 0.0f, -5.0f);
-
-    // Place sun FAR away so it sits on sky dome
-    float sunDistance = 120.0f;
-    lightPosition_worldspace = sceneCenter - direction * sunDistance;
+    sun_pos = - direction * radius;
+    //// Place sun FAR away so it sits on sky dome
+    //float sunDistance = 120.0f;
+    //lightPosition_worldspace = sceneCenter - direction * sunDistance;
 
     // --- LIGHT VIEW MATRIX FOR SHADOWS ---
     //glm::vec3 up = vec3(0, 1, 0);

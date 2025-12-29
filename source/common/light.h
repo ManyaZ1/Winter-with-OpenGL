@@ -10,6 +10,8 @@ public:
 
     glm::vec3 lightPosition_worldspace;
     glm::vec3 direction;
+    glm::vec3 sun_pos;
+	float radius;
     glm::vec4 La;
     glm::vec4 Ld;
     glm::vec4 Ls;
@@ -33,7 +35,8 @@ public:
         glm::vec4 init_La,
         glm::vec4 init_Ld,
         glm::vec4 init_Ls,
-        glm::vec3 init_direction);
+        glm::vec3 init_direction,
+        float radius);
   
     void update();
 

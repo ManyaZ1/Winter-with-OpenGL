@@ -34,6 +34,7 @@ void createContext();
 void mainLoop();
 void free();
 
+#define FULL_SCREEN 0
 #define W_WIDTH  1800
 #define W_HEIGHT  900
 #define TITLE "Winter"
@@ -650,8 +651,9 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glBindTexture(GL_TEXTURE_2D, sunTexture);
 	glUniform1i(glGetUniformLocation(programs.lighting, "sunTex"), 0);
 
-	vec3 sunPos = vec3(35.0f, 50.0f, 20.0f);
-	mat4 sunM = translate(mat4(1.0f), sunPos) * scale(mat4(1.0f), vec3(0.9f));
+	// Use the light's actual position (updated by light->update())
+	vec3 sunPos = light->sun_pos;
+	mat4 sunM = translate(mat4(1.0f), sunPos) * scale(mat4(1.0f), vec3(2.0f));
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &sunM[0][0]);
 	sphere->bind();
 	sphere->draw();
@@ -855,18 +857,27 @@ void initialize() {
 	// Open a window and create its OpenGL context
 	//window = glfwCreateWindow(W_WIDTH, W_HEIGHT, TITLE, NULL, NULL);
 	
-	// 1. Get the primary monitor handle
+	//// 1. Get the primary monitor handle
+	//GLFWmonitor* primary_monitor = glfwGetPrimaryMonitor();
+
+	//// 2. Get the video mode of the primary monitor to use its resolution
+	//const GLFWvidmode* mode = glfwGetVideoMode(primary_monitor);
+
+	//// 3. Create the window, passing the monitor handle and using its resolution
+	//// The W_WIDTH and W_HEIGHT are replaced by the monitor's resolution for clarity,
+	//// but you can still use your variables if you prefer.
+	//// The last two NULL arguments are for the monitor and share context respectively.
+	//window = glfwCreateWindow(mode->width, mode->height, TITLE, primary_monitor, NULL);
+	// Open a window and create its OpenGL context
+#if FULL_SCREEN == 1
+	// Fullscreen mode
 	GLFWmonitor* primary_monitor = glfwGetPrimaryMonitor();
-
-	// 2. Get the video mode of the primary monitor to use its resolution
 	const GLFWvidmode* mode = glfwGetVideoMode(primary_monitor);
-
-	// 3. Create the window, passing the monitor handle and using its resolution
-	// The W_WIDTH and W_HEIGHT are replaced by the monitor's resolution for clarity,
-	// but you can still use your variables if you prefer.
-	// The last two NULL arguments are for the monitor and share context respectively.
 	window = glfwCreateWindow(mode->width, mode->height, TITLE, primary_monitor, NULL);
-
+#else
+	// Windowed mode
+	window = glfwCreateWindow(W_WIDTH, W_HEIGHT, TITLE, NULL, NULL);
+#endif
 	if (window == NULL) {
 		glfwTerminate();
 		throw runtime_error(string(string("Failed to open GLFW window.") +
@@ -925,7 +936,8 @@ void initialize() {
 		vec4{ 0.7f, 0.75f, 0.85f, 1 },   // La - cool ambient (blueish)
 		vec4{ 0.85f, 0.9f, 0.95f, 1 },   // Ld - cool diffuse (slightly blue-white)
 		vec4{ 0.9f, 0.95f, 1.0f, 1 },    // Ls - cool specular (white-blue)
-		normalize(vec3(-0.3f, -1.0f, -0.2f))   // SUN DIRECTION
+		normalize(vec3(-0.3f, -1.0f, -0.2f)),   // SUN DIRECTION
+		150.0f  // radius
 	);
 	/*light2 = new Light(window,
 		vec4{ 1, 1, 1, 1 },
