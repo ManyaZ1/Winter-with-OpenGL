@@ -7,7 +7,7 @@
 
 // Include GLFW
 #include <glfw3.h>
-
+#include <fstream>
 // Include GLM
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -21,6 +21,7 @@
 #include <common/light.h> 
 #include "common/cloud.h"
 #include "common/forest.h"
+#include "common/bush.h"
 #include <vector>
 
 #define SCALING_FACTOR 200//60 //lab.cpp kai camera.cpp
@@ -33,8 +34,14 @@ void initialize();
 void createContext();
 void mainLoop();
 void free();
-
-#define FULL_SCREEN 0
+float sampleHeightAt(
+	float x, float z,
+	const std::vector<float>& heightData,
+	int gridResolution,
+	float minX, float maxX,
+	float minZ, float maxZ);
+std::vector<float> getHeightDataOnly(const std::string& filePath);
+#define FULL_SCREEN 1
 #define W_WIDTH  1800
 #define W_HEIGHT  900
 #define TITLE "Winter"
@@ -62,7 +69,7 @@ Drawable* quad;
 Drawable* treeModel1; 
 Drawable* bushModel;
 Drawable* deerModel;
-
+Drawable* bearModel;
 GLuint lightPowerLocation;
 
 // locations for programs.depth
@@ -90,6 +97,7 @@ GLuint bushTexture2;
 GLuint bushTexture3;
 //deer
 GLuint deerTexture;
+GLuint bearTexture;
 // locations for miniMapProgram
 //GLuint quadTextureSamplerLocation;
 
@@ -99,7 +107,7 @@ CloudSystem* cloudSystem;
 
 //forest
 Forest* forest;
-
+BushField* bushes;
 // Creating a structure to store the material parameters of an object
 struct Material
 {
@@ -123,6 +131,10 @@ struct TexLocations {
 	GLuint needleTex;
 	GLuint needleTex2;
 	GLuint needleTex3;
+
+	GLuint bushTex1;
+	GLuint bushTex2;
+	GLuint bushTex3;
 
 	// sky & sun
 	GLuint skyTex;
@@ -173,7 +185,7 @@ struct Uniforms {
 Programs programs;
 Uniforms u;
 TexLocations t;
-
+std::vector<float> heightData;
 
 GLuint loadTextureRepeat(const std::string& path) {
 	GLuint tex = loadSOIL(path.c_str());
@@ -262,6 +274,7 @@ void free() {
 	glDeleteProgram(programs.lighting);
 	glDeleteProgram(programs.depth);
 	delete forest;
+	delete bushes;
 	glfwTerminate();
 }
 
@@ -336,6 +349,12 @@ void createContext() {
 	// deer texture
 	deerTexture = loadSOIL("assets/deer_colored.png");
 
+	// load bear model
+	bearModel = new Drawable("assets/bear.obj");
+	// bear texture
+	//bearTexture = loadSOIL("assets/bear_texture.png");
+	bearTexture = loadSOIL("assets/brown_bear.png");
+
 	// model2 (sphere) is used for light visualization, keep loading it
 	sphere = new Drawable("earth.obj");
 
@@ -379,19 +398,26 @@ void createContext() {
 
 	//BUSH
 	bushModel = new Drawable("assets/bush.obj");
+	bushes= new BushField(bushModel, programs.lighting, 200);
+	bushes->setTerrainBounds(
+		-scale / 2, scale / 2,  // X bounds
+		-scale / 2, scale / 2,  // Z bounds
+		0.0f, 50.0f,        // Y bounds
+		1.0f);
+	bushes->loadTerrainBinary("assets/heightmap/terrain_data.bin");
+	std::vector<glm::vec3> treePositions;
+	for (const auto& t : forest->instances)
+		treePositions.push_back(t.position);
+
+	bushes->setTreeReferences(treePositions);
+	bushes->generate();
+	
+
 	// 3 bush textures
-	bushTexture1 = loadSOIL("assets/pixel_bush.png");
-	glBindTexture(GL_TEXTURE_2D, bushTexture1);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	bushTexture2 = loadSOIL("assets/bush2.png");
-	glBindTexture(GL_TEXTURE_2D, bushTexture2);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	bushTexture3 = loadSOIL("assets/bush3.png");
-	glBindTexture(GL_TEXTURE_2D, bushTexture3);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	bushTexture1 = loadTextureRepeat("assets/pixel_bush.png");
+	bushTexture2 = loadTextureRepeat("assets/bush2.png");
+	bushTexture3 = loadTextureRepeat("assets/bush3.png");
+
 	
 
 	/* CLOUD SYSTEM */
@@ -466,6 +492,10 @@ void createContext() {
 	t.needleTex = glGetUniformLocation(programs.lighting, "needleTex");
 	t.needleTex2 = glGetUniformLocation(programs.lighting, "needleTex2");
 	t.needleTex3 = glGetUniformLocation(programs.lighting, "needleTex3");
+
+	t.bushTex1 = glGetUniformLocation(programs.lighting, "bushTex1");
+	t.bushTex2 = glGetUniformLocation(programs.lighting, "bushTex2");
+	t.bushTex3 = glGetUniformLocation(programs.lighting, "bushTex3");
 
 	// sky / sun
 	t.skyTex = glGetUniformLocation(programs.lighting, "skyTex");
@@ -596,7 +626,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glUniform1i(t.maskTex, 5);
 	glUniform1f(glGetUniformLocation(programs.lighting, "time"), glfwGetTime());
 
-	mat4 terrainM = translate(mat4(), vec3(0.0f, 0.5f, 0.0f)) * scale(mat4(), vec3(SCALING_FACTOR));
+	mat4 terrainM = translate(mat4(), vec3(0.0f, 0.0f, 0.0f)) * scale(mat4(), vec3(SCALING_FACTOR));
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &terrainM[0][0]);
 	terrain->bind();
 	terrain->draw();
@@ -652,14 +682,40 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	// 6. BUSH
 	resetDefaultStates();
 	glUniform1i(u.useTexture, 6); // Bush mode
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, bushTexture2);
-	glUniform1i(u.diffuseSampler, 0);
+	glUniform1i(u.useInstancing, 1);
+	glUniform2f(u.uvScale, 1.0f, 1.0f);
+	//glActiveTexture(GL_TEXTURE0);
+	//glBindTexture(GL_TEXTURE_2D, bushTexture2);
+	//glUniform1i(u.diffuseSampler, 0);
 
-	mat4 bushM = translate(mat4(1.0f), vec3(22.0f, 4.0f, 20.0f)) * scale(mat4(1.0f), vec3(0.03f, 0.02f, 0.03f)); //anisotropic scaling 
-	glUniformMatrix4fv(u.M, 1, GL_FALSE, &bushM[0][0]);
-	bushModel->bind();
-	bushModel->draw();
+	//mat4 bushM = translate(mat4(1.0f), vec3(22.0f, 4.0f, 20.0f)) * scale(mat4(1.0f), vec3(0.03f, 0.02f, 0.03f)); //anisotropic scaling 
+	//glUniformMatrix4fv(u.M, 1, GL_FALSE, &bushM[0][0]);
+	//bushModel->bind();
+	//bushModel->draw();
+		// CRITICAL FIX: Bind tree textures BEFORE drawing
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, bushTexture1);
+	glUniform1i(t.bushTex1, 0);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, bushTexture2);
+	glUniform1i(t.bushTex2, 1);
+
+	// Bind additional needle textures if you have them
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, bushTexture3); // fir.jpg
+	glUniform1i(t.bushTex3, 2);
+
+	bushes->draw();
+
+	for (int i = 4; i <= 7; i++)
+		glDisableVertexAttribArray(i);
+
+	// Only if textureIndex is instanced
+	glDisableVertexAttribArray(8);
+
+
+
 
 	//// 7. SUZANNE
 	//resetDefaultStates();
@@ -674,6 +730,12 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	//model1->bind();
 	//model1->draw();
 
+
+	int gridRes = 1024;
+	float minX = -100.0f, maxX = 100.0f;
+	float minZ = -100.0f, maxZ = 100.0f;
+
+
 	//8. DEER 
 	//LOAD DEER OBJECT 
 	resetDefaultStates();
@@ -681,11 +743,29 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, deerTexture);
 	glUniform1i(u.diffuseSampler, 0);
-
-	mat4 deerM = translate(mat4(1.0f), vec3(22.0f, 5.0f, 22.0f)) * scale(mat4(1.0f), vec3(1.0f));
+	float deerX = 22.0f;
+	float deerZ = 22.0f;
+	heightData = getHeightDataOnly("assets/heightmap/terrain_data.bin");
+	float deerY= sampleHeightAt(deerX, deerZ, heightData, gridRes, minX, maxX, minZ, maxZ);
+	cout << "Deer Y position: " << deerY << endl;
+	mat4 deerM = translate(mat4(1.0f), vec3(deerX,deerY,deerZ)) * scale(mat4(1.0f), vec3(1.0f));
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &deerM[0][0]);
 	deerModel->bind();
 	deerModel->draw();
+
+	//9. BEAR 
+	//LOAD BEAR OBJECT
+	resetDefaultStates();
+	glUniform1i(u.useTexture, 6); // Bush & Deer mode
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, bearTexture);
+	glUniform1i(u.diffuseSampler, 0);
+	float bearY = sampleHeightAt(-22.0f, -22.0f, heightData, gridRes, minX, maxX, minZ, maxZ) ;
+	cout << "Bear Y position: " << bearY << endl;
+	mat4 bearM = translate(mat4(1.0f), vec3(-22.0f, bearY, -22.0f)) * scale(mat4(1.0f), vec3(1.0f));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &bearM[0][0]);
+	bearModel->bind();
+	bearModel->draw();
 }
 
 void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
@@ -872,7 +952,7 @@ void initialize() {
 	//// The last two NULL arguments are for the monitor and share context respectively.
 	//window = glfwCreateWindow(mode->width, mode->height, TITLE, primary_monitor, NULL);
 	// Open a window and create its OpenGL context
-#if FULL_SCREEN == 1
+#if FULL_SCREEN == 0
 	// Fullscreen mode
 	GLFWmonitor* primary_monitor = glfwGetPrimaryMonitor();
 	const GLFWvidmode* mode = glfwGetVideoMode(primary_monitor);
@@ -984,3 +1064,117 @@ int main(void) {
 //	vec4{ 0.297254, 0.30829, 0.306678, 0.8 },
 //	12.8f
 //};
+
+// to do
+//float sampleHeightAt(float x, float z,
+//	const std::vector<float>& heightData,
+//	int gridRes,
+//	float minX, float maxX,
+//	float minZ, float maxZ)
+//{
+//	float u = (x - minX) / (maxX - minX);
+//	float v = (z - minZ) / (maxZ - minZ);
+//
+//	u = glm::clamp(u, 0.0f, 1.0f);
+//	v = glm::clamp(v, 0.0f, 1.0f);
+//
+//	int ix = int(u * (gridRes - 1));
+//	int iz = int(v * (gridRes - 1));
+//
+//	return heightData[iz * gridRes + ix];
+//}
+//height helpers
+float sampleHeightAt(
+	float x, float z,
+	const std::vector<float>& heightData,
+	int gridResolution,
+	float minX, float maxX,
+	float minZ, float maxZ)
+{
+	if (heightData.empty() || gridResolution <= 0)
+		return 0.0f; // fallback to ground level
+
+	// Convert world coords to normalized [0,1]
+	float u = (x - minX) / (maxX - minX);
+	float v = (z - minZ) / (maxZ - minZ);
+
+	u = glm::clamp(u, 0.0f, 1.0f);
+	v = glm::clamp(v, 0.0f, 1.0f);
+
+	// Convert to grid indices
+	int ix = static_cast<int>(u * (gridResolution - 1));
+	int iz = static_cast<int>(v * (gridResolution - 1));
+
+	ix = glm::clamp(ix, 0, gridResolution - 1);
+	iz = glm::clamp(iz, 0, gridResolution - 1);
+
+	// Sample height from heightmap
+	return heightData[iz * gridResolution + ix];
+}
+std::vector<float> getHeightDataOnly(const std::string& filePath) {
+	std::ifstream file(filePath, std::ios::binary);
+
+	if (!file.is_open()) {
+		std::cerr << "Error: Could not open file " << filePath << std::endl;
+		return {}; // Return empty vector on failure
+	}
+
+	try {
+		int gridResolution;
+		// 1. Read the first integer for resolution
+		file.read(reinterpret_cast<char*>(&gridResolution), sizeof(int));
+
+		// 2. Skip the header metadata (7 floats: scaling, minX, maxX, minZ, maxZ, minY, maxY)
+		// Each float is 4 bytes, so we skip 28 bytes.
+		file.seekg(7 * sizeof(float), std::ios::cur);
+
+		// 3. Prepare the vector
+		size_t numElements = static_cast<size_t>(gridResolution) * gridResolution;
+		std::vector<float> heights(numElements);
+
+		// 4. Read ONLY the height block
+		file.read(reinterpret_cast<char*>(heights.data()), numElements * sizeof(float));
+
+		if (file.fail()) {
+			throw std::runtime_error("Failed to read height data from stream.");
+		}
+
+		file.close();
+		return heights; // Success!
+	}
+	catch (const std::exception& e) {
+		std::cerr << "Error: " << e.what() << std::endl;
+		file.close();
+		return {};
+	}
+}
+
+//glm::vec3 deerXZ(-15.0f, 0.0f, -10.0f);
+//float deerY = sampleHeightAt(
+//	deerXZ.x, deerXZ.z,
+//	heightData, gridResolution,
+//	minX, maxX, minZ, maxZ
+//);
+//
+//glm::mat4 deerM = glm::translate(glm::mat4(1.0f),
+//	glm::vec3(deerXZ.x, deerY, deerXZ.z))
+//	* glm::scale(glm::mat4(1.0f), glm::vec3(0.8f));
+//
+//glUniformMatrix4fv(u.M, 1, GL_FALSE, &deerM[0][0]);
+//deerModel->bind();
+//deerModel->draw();
+//glm::vec3 bearXZ(-22.0f, 0.0f, -22.0f);
+//float bearY = sampleHeightAt(
+//	bearXZ.x, bearXZ.z,
+//	heightData, gridResolution,
+//	minX, maxX, minZ, maxZ
+//);
+//
+//glm::mat4 bearM = glm::translate(glm::mat4(1.0f),
+//	glm::vec3(bearXZ.x, bearY, bearXZ.z))
+//	* glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
+//
+//glUniformMatrix4fv(u.M, 1, GL_FALSE, &bearM[0][0]);
+//bearModel->bind();
+//bearModel->draw();
+//

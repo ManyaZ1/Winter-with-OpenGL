@@ -119,6 +119,8 @@ add_executable(source
   common/cloud.cpp
   common/forest.h
   common/forest.cpp
+  common/bush.h
+  common/bush.cpp
 
   source/ShadowMapping.fragmentshader
   source/ShadowMapping.vertexshader

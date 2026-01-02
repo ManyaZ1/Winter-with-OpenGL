@@ -5,7 +5,10 @@
 #include <fstream>
 // Height constraints for tree placement
 static constexpr float TREE_MIN_HEIGHT = 3.0f;//8.0f;
-static constexpr float TREE_MAX_HEIGHT = 20.0f;// Raised from 28.0
+static constexpr float TREE_MAX_HEIGHT = 28.0f;// Raised from 28.0
+
+static constexpr float MIN_TREE_TREE_DIST = 4.0f;   // tune this
+static constexpr float MIN_TREE_BUSH_DIST = 2.0f; // tune this
 
 Forest::Forest(Drawable* model, GLuint shaderID, int count)
     : treeModel(model), shader(shaderID), targetInstanceCount(count)
@@ -85,55 +88,16 @@ bool Forest::loadTerrainBinary(const std::string& filePath) {
     file.close();
     return true;
 }
-//    try {
-//        // 1. Read Header (matching Python's "ifffffff")
-//        // Order: res, scale, minX, maxX, minZ, maxZ, min_h, max_h
-//        file.read(reinterpret_cast<char*>(&gridResolution), sizeof(int));
-//        file.read(reinterpret_cast<char*>(&scalingFactor), sizeof(float));
-//        file.read(reinterpret_cast<char*>(&minX), sizeof(float));
-//        file.read(reinterpret_cast<char*>(&maxX), sizeof(float));
-//        file.read(reinterpret_cast<char*>(&minZ), sizeof(float));
-//        file.read(reinterpret_cast<char*>(&maxZ), sizeof(float));
-//        file.read(reinterpret_cast<char*>(&minY), sizeof(float));
-//        file.read(reinterpret_cast<char*>(&maxY), sizeof(float));
-//
-//        // 2. Prepare memory buffers
-//        size_t numElements = static_cast<size_t>(gridResolution) * gridResolution;
-//        heightData.assign(numElements, 0.0f);
-//        //lakeMask.assign(numElements, 0.0f);
-//        //mountainMask.assign(numElements, 0.0f);
-//        forestMask.assign(numElements, 0.0f);
-//        
-//
-//        // 3. Read raw float buffers sequentially
-//        // Read Heightmap
-//        file.read(reinterpret_cast<char*>(heightData.data()), numElements * sizeof(float));
-//        // READ FOREST
-//        file.read(reinterpret_cast<char*>(forestMask.data()),
-//            numElements * sizeof(float));
-//        // Read Lake Mask
-//        //file.read(reinterpret_cast<char*>(lakeMask.data()), numElements * sizeof(float));
-//
-//        // Read Mountain Mask
-//        //file.read(reinterpret_cast<char*>(mountainMask.data()), numElements * sizeof(float));
-//
-//        if (file.fail()) {
-//            throw std::runtime_error("File stream failed during data read. File might be truncated.");
-//        }
-//
-//        std::cout << "Successfully loaded terrain: " << gridResolution << "x" << gridResolution << std::endl;
-//        std::cout << "Bounds X: [" << minX << ", " << maxX << "] Y: [" << minY << ", " << maxY << "]" << std::endl;
-//
-//    }
-//    catch (const std::exception& e) {
-//        std::cerr << "Exception while loading terrain: " << e.what() << std::endl;
-//        file.close();
-//        return false;
-//    }
-//
-//    file.close();
-//    return true;
-//}
+
+bool Forest::isFarFromExistingTrees(float x, float z) const {
+    for (const auto& t : instances) {
+        float dx = x - t.position.x;
+        float dz = z - t.position.z;
+        if (dx * dx + dz * dz < MIN_TREE_TREE_DIST * MIN_TREE_TREE_DIST)
+            return false;
+    }
+    return true;
+}
 
 void Forest::loadHeightData(const std::vector<float>& heights, int resolution) {
     heightData = heights;
@@ -302,7 +266,8 @@ void Forest::generate() {
             << " pos = (" << x << ", " << y << ", " << z << ")\n";
         if (!isValidPlacement(x, z, y))
             continue;
-
+        if (!isFarFromExistingTrees(x, z))
+            continue;
         TreeInstance t;
         t.position = glm::vec3(x, y, z);    
         t.rotationY = rr(rng);
@@ -318,6 +283,8 @@ void Forest::generate() {
 
     std::cout << "Generated " << instances.size() << " trees (target: "
         << targetInstanceCount << ")" << std::endl;
+	// add placing deer and bear here later
+    
     if (instances.empty()) {
         std::cerr << "ERROR: No valid tree positions found!" << std::endl;
         std::cerr << "Check terrain bounds and height constraints" << std::endl;
@@ -415,243 +382,3 @@ void Forest::draw() {
 
     glBindVertexArray(0);
 }
-//void Forest::draw() {
-//    if (!treeModel || modelMatrices.empty()) {
-//        return;
-//    }
-//
-//    // Bind the tree model's VAO
-//    treeModel->bind();
-//
-//    // Draw all instances
-//    glDrawElementsInstanced(
-//        GL_TRIANGLES,
-//        (GLsizei)treeModel->indices.size(), // Use the indices vector size
-//        GL_UNSIGNED_INT,
-//        0,
-//        (GLsizei)modelMatrices.size()
-//    );
-//    // FIX: Disable the attributes so they don't leak to other models
-//    for (int i = 0; i < 5; i++) { // Locations 4, 5, 6, 7, and 8
-//        glDisableVertexAttribArray(4 + i);
-//    }
-//}
-//void Forest::setupInstancing() {
-//    if (!treeModel) {
-//        std::cerr << "Error: treeModel is null!" << std::endl;
-//        return;
-//    }
-//
-//    // Bind the tree model's VAO
-//    treeModel->bind();
-//
-//    // Create and upload model matrix buffer
-//    glGenBuffers(1, &instanceVBO);
-//    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-//    glBufferData(
-//        GL_ARRAY_BUFFER,
-//        modelMatrices.size() * sizeof(glm::mat4),
-//        modelMatrices.data(),
-//        GL_STATIC_DRAW
-//    );
-//
-//    // Set up mat4 as 4 vec4 attributes (locations 4-7)
-//    // These need to be consecutive and match your vertex shader
-//    for (int i = 0; i < 4; i++) {
-//        glEnableVertexAttribArray(4 + i);
-//        glVertexAttribPointer(
-//            4 + i,                          // attribute location
-//            4,                               // size (vec4)
-//            GL_FLOAT,                        // type
-//            GL_FALSE,                        // normalized?
-//            sizeof(glm::mat4),              // stride
-//            (void*)(sizeof(float) * i * 4)  // offset
-//        );
-//        glVertexAttribDivisor(4 + i, 1);    // advance once per instance
-//    }
-//
-//    // Create and upload texture index buffer
-//    glGenBuffers(1, &textureVBO);
-//    glBindBuffer(GL_ARRAY_BUFFER, textureVBO);
-//    glBufferData(
-//        GL_ARRAY_BUFFER,
-//        textureIndices.size() * sizeof(int),
-//        textureIndices.data(),
-//        GL_STATIC_DRAW
-//    );
-//
-//    // Set up texture index attribute (location 8)
-//    glEnableVertexAttribArray(8);
-//    glVertexAttribIPointer(8, 1, GL_INT, sizeof(int), (void*)0);
-//    glVertexAttribDivisor(8, 1);
-//
-//    // Unbind
-//    glBindBuffer(GL_ARRAY_BUFFER, 0);
-//
-//    std::cout << "Instancing set up for " << modelMatrices.size() << " trees" << std::endl;
-//}
-//void Forest::setupInstancing() {
-//    if (!treeModel) {
-//        std::cerr << "Error: treeModel is null!" << std::endl;
-//        return;
-//    }
-//
-//    std::cout << "Setting up instancing for " << modelMatrices.size() << " trees..." << std::endl;
-//
-//    // CRITICAL: Bind the tree model's VAO FIRST
-//    treeModel->bind();
-//
-//    // Clean up old buffers if they exist
-//    if (instanceVBO != 0) {
-//        glDeleteBuffers(1, &instanceVBO);
-//    }
-//    if (textureVBO != 0) {
-//        glDeleteBuffers(1, &textureVBO);
-//    }
-//
-//    // Create and upload model matrix buffer
-//    glGenBuffers(1, &instanceVBO);
-//    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-//    glBufferData(
-//        GL_ARRAY_BUFFER,
-//        modelMatrices.size() * sizeof(glm::mat4),
-//        modelMatrices.data(),
-//        GL_STATIC_DRAW
-//    );
-//
-//    // Set up mat4 as 4 vec4 attributes (locations 4-7)
-//    for (int i = 0; i < 4; i++) {
-//        glEnableVertexAttribArray(4 + i);
-//        glVertexAttribPointer(
-//            4 + i,
-//            4,
-//            GL_FLOAT,
-//            GL_FALSE,
-//            sizeof(glm::mat4),
-//            (void*)(sizeof(float) * i * 4)
-//        );
-//        glVertexAttribDivisor(4 + i, 1);
-//    }
-//
-//    // Create and upload texture index buffer
-//    glGenBuffers(1, &textureVBO);
-//    glBindBuffer(GL_ARRAY_BUFFER, textureVBO);
-//    glBufferData(
-//        GL_ARRAY_BUFFER,
-//        textureIndices.size() * sizeof(int),
-//        textureIndices.data(),
-//        GL_STATIC_DRAW
-//    );
-//
-//    glEnableVertexAttribArray(8);
-//    glVertexAttribIPointer(8, 1, GL_INT, sizeof(int), (void*)0);
-//    glVertexAttribDivisor(8, 1);
-//    // Set divisors
-//    for (int i = 0; i < 4; i++) {
-//        glEnableVertexAttribArray(4 + i);
-//        glVertexAttribDivisor(4 + i, 1);
-//    }
-//    glEnableVertexAttribArray(8);
-//    glVertexAttribDivisor(8, 1);
-//
-//    // CRITICAL: Unbind the buffers FIRST
-//    glBindBuffer(GL_ARRAY_BUFFER, 0);
-//
-//    // CRITICAL: Now unbind the VAO. 
-//    // DO NOT disable the attributes here if you want the VAO to remember them.
-//    // VAOs are meant to store the "Enabled" state of attributes.
-//    glBindVertexArray(0);
-//    //// CRITICAL: Unbind everything to prevent state leakage
-//    //glBindBuffer(GL_ARRAY_BUFFER, 0);
-//
-//    //// CRITICAL: Disable the instancing attributes immediately after setup
-//    //// They will be re-enabled when forest->draw() is called
-//    //for (int i = 4; i <= 8; i++) {
-//    //    glDisableVertexAttribArray(i);
-//    //}
-//
-//    //// CRITICAL: Unbind the VAO
-//    //glBindVertexArray(0);
-//
-//    //std::cout << "Instancing setup complete. Attributes disabled and VAO unbound." << std::endl;
-//
-//    ////debuggg
-//    //glBindVertexArray(0); // unbind VAO
-//    //for (int i = 4; i <= 8; i++) {
-//    //    glDisableVertexAttribArray(i);   // disable instancing
-//    //    if (i <= 7) glVertexAttribDivisor(i, 0); // reset divisors
-//    //}
-//
-//}
-//void Forest::setupInstancing() {
-//    if (!treeModel || modelMatrices.empty()) {
-//        std::cerr << "Error: treeModel is null or no instances to setup!" << std::endl;
-//        return;
-//    }
-//
-//    // 1. Bind the tree model's VAO to record these settings
-//    //treeModel->instanceCount = (int)modelMatrices.size();
-//    treeModel->instanceCount = targetInstanceCount;  //?
-//    treeModel->bind();
-//
-//    // Clean up old buffers if they exist (prevents memory leaks on re-generation)
-//    if (instanceVBO != 0) glDeleteBuffers(1, &instanceVBO);
-//    if (textureVBO != 0) glDeleteBuffers(1, &textureVBO);
-//
-//    // 2. Setup Model Matrices (Attributes 4, 5, 6, 7)
-//    glGenBuffers(1, &instanceVBO);
-//    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-//    glBufferData(
-//        GL_ARRAY_BUFFER,
-//        modelMatrices.size() * sizeof(glm::mat4),
-//        modelMatrices.data(),
-//        GL_STATIC_DRAW
-//    );
-//
-//    // A mat4 takes up 4 attribute slots
-//    for (int i = 0; i < 4; i++) {
-//        GLuint loc = 4 + i;
-//        glEnableVertexAttribArray(loc);
-//        glVertexAttribPointer(
-//            loc,
-//            4,
-//            GL_FLOAT,
-//            GL_FALSE,
-//            sizeof(glm::mat4),
-//            (void*)(sizeof(float) * i * 4)
-//        );
-//        glVertexAttribDivisor(loc, 1); // Advance once per instance, not per vertex
-//    }
-//
-//    // 3. Setup Texture Indices (Attribute 8)
-//    glGenBuffers(1, &textureVBO);
-//    glBindBuffer(GL_ARRAY_BUFFER, textureVBO);
-//    glBufferData(
-//        GL_ARRAY_BUFFER,
-//        textureIndices.size() * sizeof(int),
-//        textureIndices.data(),
-//        GL_STATIC_DRAW
-//    );
-//
-//    glEnableVertexAttribArray(8);
-//    glVertexAttribIPointer(8, 1, GL_INT, sizeof(int), (void*)0);
-//    glVertexAttribDivisor(8, 1); // Advance once per instance
-//
-//    // 4. CLEANUP (The order here is vital)
-//
-//    // Unbind the buffer first
-//    glBindBuffer(GL_ARRAY_BUFFER, 0);
-//
-//    // Disable the attributes specifically for this VAO so they don't 
-//    // stay active when you use the VAO for other things (like shadow passes)
-//    // They will be re-enabled inside your Forest::draw() call.
-//    for (int i = 4; i <= 8; i++) {
-//        glDisableVertexAttribArray(i);
-//    }
-//
-//    // Finally, unbind the VAO
-//    glBindBuffer(GL_ARRAY_BUFFER, 0);
-//    glBindVertexArray(0);
-//
-//    std::cout << "Instancing successfully set up for " << modelMatrices.size() << " trees." << std::endl;
-//}

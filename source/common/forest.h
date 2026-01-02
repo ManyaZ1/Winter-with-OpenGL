@@ -25,15 +25,13 @@ public:
     // Load terrain data
     bool loadTerrainBinary(const std::string& filePath);
     void loadHeightData(const std::vector<float>& heights, int resolution);
-    void loadLakeMask(const std::vector<float>& mask);
-    void loadMountainMask(const std::vector<float>& mask);
-
+    bool isFarFromExistingTrees(float x, float z) const;
     // Generate tree positions
     void generate();
 
     // Render all trees
     void draw();
-
+    std::vector<TreeInstance> instances; //sos
 
 private:
     void setupInstancing();
@@ -47,7 +45,7 @@ private:
     int targetInstanceCount;
 
     // Instance data
-    std::vector<TreeInstance> instances;
+    //std::vector<TreeInstance> instances;
     std::vector<glm::mat4> modelMatrices;
     std::vector<int> textureIndices;
 
