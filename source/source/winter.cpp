@@ -108,6 +108,10 @@ CloudSystem* cloudSystem;
 //forest
 Forest* forest;
 BushField* bushes;
+
+float deerX; float deerZ; float deerY;
+float bearX; float bearZ; float bearY;
+
 // Creating a structure to store the material parameters of an object
 struct Material
 {
@@ -743,10 +747,10 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, deerTexture);
 	glUniform1i(u.diffuseSampler, 0);
-	float deerX = 22.0f;
-	float deerZ = 22.0f;
+	deerX = 22.0f;
+	deerZ = 22.0f;
 	heightData = getHeightDataOnly("assets/heightmap/terrain_data.bin");
-	float deerY= sampleHeightAt(deerX, deerZ, heightData, gridRes, minX, maxX, minZ, maxZ);
+	deerY= sampleHeightAt(deerX, deerZ, heightData, gridRes, minX, maxX, minZ, maxZ);
 	cout << "Deer Y position: " << deerY << endl;
 	mat4 deerM = translate(mat4(1.0f), vec3(deerX,deerY,deerZ)) * scale(mat4(1.0f), vec3(1.0f));
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &deerM[0][0]);
@@ -760,9 +764,11 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, bearTexture);
 	glUniform1i(u.diffuseSampler, 0);
-	float bearY = sampleHeightAt(-22.0f, -22.0f, heightData, gridRes, minX, maxX, minZ, maxZ) ;
+	bearX = -22.0f;
+	bearZ = -22.0f;
+	bearY = sampleHeightAt(bearX,bearZ, heightData, gridRes, minX, maxX, minZ, maxZ) ;
 	cout << "Bear Y position: " << bearY << endl;
-	mat4 bearM = translate(mat4(1.0f), vec3(-22.0f, bearY, -22.0f)) * scale(mat4(1.0f), vec3(1.0f));
+	mat4 bearM = translate(mat4(1.0f), vec3(bearX, bearY, bearZ)) * scale(mat4(1.0f), vec3(1.0f));
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &bearM[0][0]);
 	bearModel->bind();
 	bearModel->draw();
@@ -812,6 +818,20 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 	//
 	//model1->bind();
 	//model1->draw();
+	//bush
+	glUniform1i(u.useInstancing, 1);  // Enable instancing
+	bushes->draw();
+	glUniform1i(u.useInstancing, 0);  // Disable 
+	//deer
+	mat4 deerM = translate(mat4(1.0f), vec3(deerX, deerY, deerZ)) * scale(mat4(1.0f), vec3(1.0f));
+	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &deerM[0][0]);
+	deerModel->bind();
+	deerModel->draw();
+	//bear
+	mat4 bearM = translate(mat4(1.0f), vec3(bearX, bearY, bearZ)) * scale(mat4(1.0f), vec3(1.0f));
+	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &bearM[0][0]);
+	bearModel->bind();
+	bearModel->draw();
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -898,9 +918,9 @@ void mainLoop() {
 		if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
 			// Spawn cloud at random position
 			vec3 pos = vec3(
-				-60.0f + (rand() % 120),  // X: -30 to 60
-				15.0f + (rand() % 45),    // Y: 15 to 60
-				-60.0f + (rand() % 120)    // Z: -60 to 60
+				-100.0f + (rand() % 200),  // X: -100 to 100
+				15.0f + (rand() % 60),    // Y: 15 to 75
+				-100.0f + (rand() % 200)    // Z: -60 to 60
 			);
 			float size = 4.0f + (rand() % 5); // Size: 4 to 9
 			cloudSystem->addCloud(pos, size);
@@ -1048,41 +1068,6 @@ int main(void) {
 	return 0;
 }
 
-// Create two sample materials
-//const Material polishedSilver
-//{
-//	vec4{0.23125, 0.23125, 0.23125, 1},
-//	vec4{0.2775, 0.2775, 0.2775, 1},
-//	vec4{0.773911, 0.773911, 0.773911, 1},
-//	89.6f
-//};
-//
-//const Material turquoise
-//{
-//	vec4{ 0.1, 0.18725, 0.1745, 0.8 },
-//	vec4{ 0.396, 0.74151, 0.69102, 0.8 },
-//	vec4{ 0.297254, 0.30829, 0.306678, 0.8 },
-//	12.8f
-//};
-
-// to do
-//float sampleHeightAt(float x, float z,
-//	const std::vector<float>& heightData,
-//	int gridRes,
-//	float minX, float maxX,
-//	float minZ, float maxZ)
-//{
-//	float u = (x - minX) / (maxX - minX);
-//	float v = (z - minZ) / (maxZ - minZ);
-//
-//	u = glm::clamp(u, 0.0f, 1.0f);
-//	v = glm::clamp(v, 0.0f, 1.0f);
-//
-//	int ix = int(u * (gridRes - 1));
-//	int iz = int(v * (gridRes - 1));
-//
-//	return heightData[iz * gridRes + ix];
-//}
 //height helpers
 float sampleHeightAt(
 	float x, float z,
@@ -1148,33 +1133,3 @@ std::vector<float> getHeightDataOnly(const std::string& filePath) {
 		return {};
 	}
 }
-
-//glm::vec3 deerXZ(-15.0f, 0.0f, -10.0f);
-//float deerY = sampleHeightAt(
-//	deerXZ.x, deerXZ.z,
-//	heightData, gridResolution,
-//	minX, maxX, minZ, maxZ
-//);
-//
-//glm::mat4 deerM = glm::translate(glm::mat4(1.0f),
-//	glm::vec3(deerXZ.x, deerY, deerXZ.z))
-//	* glm::scale(glm::mat4(1.0f), glm::vec3(0.8f));
-//
-//glUniformMatrix4fv(u.M, 1, GL_FALSE, &deerM[0][0]);
-//deerModel->bind();
-//deerModel->draw();
-//glm::vec3 bearXZ(-22.0f, 0.0f, -22.0f);
-//float bearY = sampleHeightAt(
-//	bearXZ.x, bearXZ.z,
-//	heightData, gridResolution,
-//	minX, maxX, minZ, maxZ
-//);
-//
-//glm::mat4 bearM = glm::translate(glm::mat4(1.0f),
-//	glm::vec3(bearXZ.x, bearY, bearXZ.z))
-//	* glm::scale(glm::mat4(1.0f), glm::vec3(1.0f));
-//
-//glUniformMatrix4fv(u.M, 1, GL_FALSE, &bearM[0][0]);
-//bearModel->bind();
-//bearModel->draw();
-//
