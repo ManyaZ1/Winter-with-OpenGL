@@ -130,6 +130,8 @@ add_executable(source
   source/Depth.vertexshader
   source/MiniMap.fragmentshader
   source/MiniMap.vertexshader
+  source/Snow.fragmentshader
+  source/Snow.vertexshader
   )
 target_link_libraries(source
   ${ALL_LIBS}

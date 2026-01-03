@@ -302,7 +302,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         _Kd.rgb = texColor.rgb;
         _Ka.rgb = 0.5 * _Kd.rgb;
         _Ks.rgb = vec3(0.1); 
-        _Ns = 5.0;
+        _Ns = 7.0;
     }
     // Phong Reflection Model
     // 1. Ambient

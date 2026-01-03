@@ -435,7 +435,7 @@ void createContext() {
 	// 3 bush textures
 	bushTexture1 = loadTextureRepeat("assets/pixel_bush.png");
 	bushTexture2 = loadTextureRepeat("assets/bush2.png");
-	bushTexture3 = loadTextureRepeat("assets/bush3.png");
+	bushTexture3 = loadTextureRepeat("assets/bush5.png");
 
 	
 
@@ -787,7 +787,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glBindTexture(GL_TEXTURE_2D, bearTexture);
 	glUniform1i(u.diffuseSampler, 0);
 	bearX = -22.0f;
-	bearZ = -22.0f;
+	bearZ = -25.0f;
 	bearY = sampleHeightAt(bearX,bearZ, heightData, gridRes, minX, maxX, minZ, maxZ) ;
 	//cout << "Bear Y position: " << bearY << endl;
 	mat4 bearM = translate(mat4(1.0f), vec3(bearX, bearY, bearZ)) * scale(mat4(1.0f), vec3(1.0f));
@@ -950,7 +950,19 @@ void mainLoop() {
 		static bool gKeyPressed = false;  // MOVE OUTSIDE the if statement
 
 		if (glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS) {
-			if (!gKeyPressed) {
+			if (!gKeyPressed) { // Toggle only on initial press
+				// ADD: CLOUDS COVERING THE SKY?
+				//spawn 200 clouds at random positions
+				for (int i = 0; i < 200; i++) {
+					vec3 pos = vec3(
+						-100.0f + (rand() % 200),  // X: -100 to 100
+						35.0f + (rand() % 60),     // Y: 35 to 95
+						-100.0f + (rand() % 200)   // Z: -100 to 100
+					);
+					float size = 4.0f + (rand() % 5); // Size: 4 to 9
+					cloudSystem->addCloud(pos, size);
+				}
+				// Toggle snowing
 				snowSystem->toggle();
 				snowingEnabled = snowSystem->isActive();
 				cout << "Snow toggled: " << (snowingEnabled ? "ON" : "OFF") << endl;  // Debug

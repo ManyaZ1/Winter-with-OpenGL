@@ -7,7 +7,7 @@ using namespace glm;
 
 SnowSystem::SnowSystem(int max) : maxParticles(max), isSnowing(false) {
     particles.resize(maxParticles);
-    spawnHeight = 100.0f; // Height where snow spawns
+    spawnHeight = 40.0f; // Height where snow spawns (lowered from 100)
 }
 
 SnowSystem::~SnowSystem() {
@@ -101,14 +101,16 @@ void SnowSystem::render(glm::mat4 viewMatrix, glm::mat4 projectionMatrix) {
     // Upload uniforms
     glm::mat4 VP = projectionMatrix * viewMatrix;
     glUniformMatrix4fv(vpLocation, 1, GL_FALSE, &VP[0][0]);
-
+    //Set M to Identity because p.position is already in World Space
+    glm::mat4 IdentityM = glm::mat4(1.0f);
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "M"), 1, GL_FALSE, &IdentityM[0][0]);
     // Bind snow texture
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, snowTexture);
     glUniform1i(texLocation, 0);
 
     // Set point size
-    glUniform1f(pointSizeLocation, 80.0f); // Adjust for visibility
+    glUniform1f(pointSizeLocation, 180.0f); // Adjust for visibility
 
     // Enable point sprites
     glEnable(GL_PROGRAM_POINT_SIZE);
@@ -135,6 +137,7 @@ void SnowSystem::render(glm::mat4 viewMatrix, glm::mat4 projectionMatrix) {
     glDrawArrays(GL_POINTS, 0, particles.size());
 
     glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);//?
     glBindVertexArray(0);
 
     glDisable(GL_POINT_SPRITE);

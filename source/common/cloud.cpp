@@ -71,9 +71,12 @@ void CloudSystem::update(float deltaTime) {
         // Move cloud
         cloud.position.x += cloud.speed * deltaTime;
 
-        // Wrap around
-        if (cloud.position.x > 50.0f) {
-            cloud.position.x = -50.0f;
+        // Wrap around in both directions
+        if (cloud.position.x > 100.0f) {
+            cloud.position.x = -100.0f;
+        }
+        else if (cloud.position.x < -100.0f) {
+            cloud.position.x = 100.0f;
         }
     }
 }
@@ -122,53 +125,3 @@ CloudSystem::~CloudSystem() {
     // Delete the array of 2 textures
     glDeleteTextures(2, cloudTextures);
 }
-
-
-//
-//void CloudSystem::render(mat4 viewMatrix, mat4 projectionMatrix) {
-//    if (clouds.empty()) return;
-//
-//    // Enable blending for transparency
-//    glEnable(GL_BLEND);
-//    //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-//    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-//    glDepthMask(GL_FALSE);
-//
-//    // Set texture mode and bind cloud texture
-//    glUniform1i(useTextureLocation, 4);
-//    //glActiveTexture(GL_TEXTURE6);
-//    //glBindTexture(GL_TEXTURE_2D, cloudTexture);
-//    //glUniform1i(textureLocation, 6);
-//
-//    // Extract camera orientation for billboarding
-//    vec3 cameraRight = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
-//    vec3 cameraUp = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
-//    vec3 cameraForward = cross(cameraRight, cameraUp);
-//
-//    // Render each cloud
-//    for (const auto& cloud : clouds) {
-//        // Build billboard matrix
-//        mat4 billboard = mat4(1.0f);
-//        billboard[0] = vec4(cameraRight * cloud.size, 0);
-//        billboard[1] = vec4(cameraUp * cloud.size, 0);
-//        billboard[2] = vec4(cameraForward * cloud.size, 0);
-//        billboard[3] = vec4(cloud.position, 1);
-//
-//        glUniform1f(uvRotationLocation, cloud.rotationAngle);
-//        glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &billboard[0][0]);
-//
-//        glActiveTexture(GL_TEXTURE6);
-//        glBindTexture(GL_TEXTURE_2D, cloudTextures[cloud.textureID]);
-//        glUniform1i(textureLocation, 6);
-//
-//        glUniform1f(uvRotationLocation, cloud.rotationAngle);
-//        glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, &billboard[0][0]);
-//
-//        cloudQuad->bind();
-//        cloudQuad->draw();
-//    }
-//
-//    // Restore OpenGL state
-//    glDepthMask(GL_TRUE);
-//    glDisable(GL_BLEND);
-//}

@@ -6,7 +6,7 @@ uniform sampler2D snowTexture;
 
 void main() {
     vec4 texColor = texture(snowTexture, gl_PointCoord);
-    if (texColor.a < 0.1) discard;
+    if (texColor.a < 0.01) discard; //now it appears!
     
     FragColor = vec4(1.0, 1.0, 1.0, texColor.a * 0.8);
 }

@@ -13,5 +13,5 @@ void main() {
     
     // Scale point size with distance
     float dist = length(gl_Position.xyz);
-    gl_PointSize = particleSize * (100.0 / dist);
+    gl_PointSize = particleSize * (500.0 / dist); //100
 }

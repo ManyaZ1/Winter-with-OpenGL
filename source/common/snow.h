@@ -26,7 +26,7 @@ private:
     float spawnHeight;
 
 public:
-    SnowSystem(int maxParticles = 2000);
+    SnowSystem(int maxParticles = 5000);
     ~SnowSystem();
 
     void initialize(GLuint program, GLuint texture);
