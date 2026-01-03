@@ -41,8 +41,8 @@ void SnowSystem::initBuffers() {
 void SnowSystem::resetParticle(SnowParticle& p, glm::vec3 cameraPos) {
     static std::random_device rd;
     static std::mt19937 gen(rd());
-    static std::uniform_real_distribution<float> distX(-50.0f, 50.0f);
-    static std::uniform_real_distribution<float> distZ(-50.0f, 50.0f);
+    static std::uniform_real_distribution<float> distX(-80.0f, 80.0f);
+    static std::uniform_real_distribution<float> distZ(-80.0f, 80.0f);
     static std::uniform_real_distribution<float> distSize(0.1f, 0.3f);
     static std::uniform_real_distribution<float> distVel(2.0f, 5.0f);
 
