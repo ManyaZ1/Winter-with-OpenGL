@@ -541,7 +541,7 @@ void createContext() {
 	snowSystem = new SnowSystem();
 	
 	snowFlakeTexture = loadSOIL("assets/circle.png");
-	snowSystem = new SnowSystem(2000);
+	snowSystem = new SnowSystem(10000);
 	snowSystem->initialize(programs.snow, snowFlakeTexture);
 	//everything orange fix
 	//// CRITICAL: Disable instancing attributes for non-instanced rendering
