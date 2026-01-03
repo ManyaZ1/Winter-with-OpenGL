@@ -941,7 +941,7 @@ void mainLoop() {
 			// Spawn cloud at random position
 			vec3 pos = vec3(
 				-100.0f + (rand() % 200),  // X: -100 to 100
-				15.0f + (rand() % 60),    // Y: 15 to 75
+				35.0f + (rand() % 60),    // Y: 15 to 75
 				-100.0f + (rand() % 200)    // Z: -60 to 60
 			);
 			float size = 4.0f + (rand() % 5); // Size: 4 to 9
