@@ -22,6 +22,7 @@
 #include "common/cloud.h"
 #include "common/forest.h"
 #include "common/bush.h"
+#include "common/snow.h"
 #include <vector>
 
 #define SCALING_FACTOR 200//60 //lab.cpp kai camera.cpp
@@ -98,6 +99,8 @@ GLuint bushTexture3;
 //deer
 GLuint deerTexture;
 GLuint bearTexture;
+//snow
+GLuint snowFlakeTexture;
 // locations for miniMapProgram
 //GLuint quadTextureSamplerLocation;
 
@@ -108,7 +111,10 @@ CloudSystem* cloudSystem;
 //forest
 Forest* forest;
 BushField* bushes;
-
+//snow
+SnowSystem* snowSystem;
+bool snowingEnabled = false;
+float snowAccumulationTime = 0.0f;
 float deerX; float deerZ; float deerY;
 float bearX; float bearZ; float bearY;
 
@@ -148,7 +154,7 @@ struct TexLocations {
 struct Programs {
 	GLuint lighting = 0;
 	GLuint depth = 0;
-	GLuint miniMap = 0;
+	GLuint snow = 0;
 };
 
 struct Uniforms {
@@ -279,13 +285,22 @@ void free() {
 	glDeleteProgram(programs.depth);
 	delete forest;
 	delete bushes;
+	delete snowSystem;
 	glfwTerminate();
 }
 
 void createContext() {
 	programs.lighting = loadShaders("ShadowMapping.vertexshader", "ShadowMapping.fragmentshader");
 	programs.depth = loadShaders("Depth.vertexshader", "Depth.fragmentshader");
-	programs.miniMap = loadShaders("MiniMap.vertexshader", "MiniMap.fragmentshader");
+	//programs.miniMap = loadShaders("MiniMap.vertexshader", "MiniMap.fragmentshader");
+	programs.snow = loadShaders("Snow.vertexshader", "Snow.fragmentshader");
+	if (programs.snow == 0) {
+		cout << "ERROR: Snow shader failed to compile!" << endl;
+	}
+	else {
+		cout << "Snow shader compiled successfully: " << programs.snow << endl;
+	}
+	
 	glUseProgram(programs.lighting);
 
 
@@ -522,6 +537,12 @@ void createContext() {
 	if (u.V == -1) cout << "WARNING: V not found!" << endl;
 	if (u.M == -1) cout << "WARNING: M not found!" << endl;
 
+	//snow
+	snowSystem = new SnowSystem();
+	
+	snowFlakeTexture = loadSOIL("assets/circle.png");
+	snowSystem = new SnowSystem(2000);
+	snowSystem->initialize(programs.snow, snowFlakeTexture);
 	//everything orange fix
 	//// CRITICAL: Disable instancing attributes for non-instanced rendering
 	//glDisableVertexAttribArray(4);
@@ -751,7 +772,8 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	deerZ = 22.0f;
 	heightData = getHeightDataOnly("assets/heightmap/terrain_data.bin");
 	deerY= sampleHeightAt(deerX, deerZ, heightData, gridRes, minX, maxX, minZ, maxZ);
-	cout << "Deer Y position: " << deerY << endl;
+	//
+	// cout << "Deer Y position: " << deerY << endl;
 	mat4 deerM = translate(mat4(1.0f), vec3(deerX,deerY,deerZ)) * scale(mat4(1.0f), vec3(1.0f));
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &deerM[0][0]);
 	deerModel->bind();
@@ -767,7 +789,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	bearX = -22.0f;
 	bearZ = -22.0f;
 	bearY = sampleHeightAt(bearX,bearZ, heightData, gridRes, minX, maxX, minZ, maxZ) ;
-	cout << "Bear Y position: " << bearY << endl;
+	//cout << "Bear Y position: " << bearY << endl;
 	mat4 bearM = translate(mat4(1.0f), vec3(bearX, bearY, bearZ)) * scale(mat4(1.0f), vec3(1.0f));
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &bearM[0][0]);
 	bearModel->bind();
@@ -925,8 +947,30 @@ void mainLoop() {
 			float size = 4.0f + (rand() % 5); // Size: 4 to 9
 			cloudSystem->addCloud(pos, size);
 		}
+		static bool gKeyPressed = false;  // MOVE OUTSIDE the if statement
 
-		//*/
+		if (glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS) {
+			if (!gKeyPressed) {
+				snowSystem->toggle();
+				snowingEnabled = snowSystem->isActive();
+				cout << "Snow toggled: " << (snowingEnabled ? "ON" : "OFF") << endl;  // Debug
+				gKeyPressed = true;
+			}
+		}
+		else {
+			gKeyPressed = false;  // Reset when key released
+		}
+		
+		// Update snow system
+		snowSystem->update(deltaTime, camera->position);
+		// Track accumulation time
+		if (snowingEnabled) {
+			snowAccumulationTime += deltaTime;
+		}
+
+		// In lighting_pass(), after rendering everything else:
+		snowSystem->render(viewMatrix, projectionMatrix);
+
 		// Render clouds
 		glUseProgram(programs.lighting);
 		glUniformMatrix4fv(u.V, 1, GL_FALSE, &viewMatrix[0][0]);

@@ -121,6 +121,8 @@ add_executable(source
   common/forest.cpp
   common/bush.h
   common/bush.cpp
+  common/snow.h
+  common/snow.cpp
 
   source/ShadowMapping.fragmentshader
   source/ShadowMapping.vertexshader

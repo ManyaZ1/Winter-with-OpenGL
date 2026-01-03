@@ -1,0 +1,12 @@
+// Snow.fragmentshader
+#version 330 core
+
+out vec4 FragColor;
+uniform sampler2D snowTexture;
+
+void main() {
+    vec4 texColor = texture(snowTexture, gl_PointCoord);
+    if (texColor.a < 0.1) discard;
+    
+    FragColor = vec4(1.0, 1.0, 1.0, texColor.a * 0.8);
+}
