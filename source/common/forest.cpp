@@ -10,8 +10,11 @@ static constexpr float TREE_MAX_HEIGHT = 28.0f;// Raised from 28.0
 static constexpr float MIN_TREE_TREE_DIST = 4.0f;   // tune this
 static constexpr float MIN_TREE_BUSH_DIST = 2.0f; // tune this
 
-Forest::Forest(Drawable* model, GLuint shaderID, int count)
-    : treeModel(model), shader(shaderID), targetInstanceCount(count)
+//Forest::Forest(Drawable* model, GLuint shaderID, int count)
+Forest::Forest(Drawable* model, GLuint shaderID, int count, float treeScale, int texMode)
+    : treeModel(model), shader(shaderID), targetInstanceCount(count),
+    defaultScale(treeScale), textureMode(texMode)
+    //: treeModel(model), shader(shaderID), targetInstanceCount(count)
 {
     instanceVBO = 0;
     textureVBO = 0;
@@ -89,14 +92,38 @@ bool Forest::loadTerrainBinary(const std::string& filePath) {
     return true;
 }
 
+//bool Forest::isFarFromExistingTrees(float x, float z) const {
+//    for (const auto& t : instances) {
+//        float dx = x - t.position.x;
+//        float dz = z - t.position.z;
+//        if (dx * dx + dz * dz < MIN_TREE_TREE_DIST * MIN_TREE_TREE_DIST)
+//            return false;
+//    }
+//    return true;
+//}
+
 bool Forest::isFarFromExistingTrees(float x, float z) const {
+    // Check against own trees
     for (const auto& t : instances) {
         float dx = x - t.position.x;
         float dz = z - t.position.z;
         if (dx * dx + dz * dz < MIN_TREE_TREE_DIST * MIN_TREE_TREE_DIST)
             return false;
     }
+    // Check against the other forest's trees
+    for (const auto& pos : externalObstacles) {
+        float dx = x - pos.x;
+        float dz = z - pos.z;
+        if (dx * dx + dz * dz < MIN_TREE_TREE_DIST * MIN_TREE_TREE_DIST)
+            return false;
+    }
     return true;
+}
+
+void Forest::addExternalPositions(const std::vector<TreeInstance>& otherInstances) {
+    for (const auto& t : otherInstances) {
+        externalObstacles.push_back(t.position);
+    }
 }
 
 void Forest::loadHeightData(const std::vector<float>& heights, int resolution) {
@@ -271,7 +298,8 @@ void Forest::generate() {
         TreeInstance t;
         t.position = glm::vec3(x, y, z);    
         t.rotationY = rr(rng);
-        t.scale = rs(rng);
+        //t.scale = 0.4f;//2.0f + rs(rng);
+        t.scale = defaultScale; // Use the scale passed in the constructor
         t.textureIndex = rt(rng);
         //t.scale = 0.00005f;
         instances.push_back(t);
@@ -357,7 +385,7 @@ void Forest::uploadToGPU() {
 }
 void Forest::draw() {
     if (!treeModel || modelMatrices.empty()) return;
-
+    glUniform1i(glGetUniformLocation(shader, "useTexture"), textureMode); //specific mode update!!
     treeModel->bind();
 
     // Re-enable instancing slots specifically for the forest draw

@@ -47,8 +47,8 @@ std::vector<float> getHeightDataOnly(const std::string& filePath);
 #define W_HEIGHT  900
 #define TITLE "Winter"
 
-#define SHADOW_WIDTH 4096//2048    8192
-#define SHADOW_HEIGHT 4096//2048  8192
+#define SHADOW_WIDTH  8192// 4096//2048    8192
+#define SHADOW_HEIGHT  8192//4096//2048  8192
 
 // Global Variables
 GLFWwindow* window;
@@ -71,6 +71,8 @@ Drawable* treeModel1;
 Drawable* bushModel;
 Drawable* deerModel;
 Drawable* bearModel;
+Drawable* appleTreeModel;
+Drawable* pineTreeModel;
 GLuint lightPowerLocation;
 
 // locations for programs.depth
@@ -99,6 +101,7 @@ GLuint bushTexture3;
 //deer
 GLuint deerTexture;
 GLuint bearTexture;
+GLuint appleTexture;
 //snow
 GLuint snowFlakeTexture;
 // locations for miniMapProgram
@@ -109,7 +112,9 @@ GLuint snowFlakeTexture;
 CloudSystem* cloudSystem;
 
 //forest
-Forest* forest;
+//Forest* forest;
+Forest* appleForest;
+Forest* pineForest;
 BushField* bushes;
 //snow
 SnowSystem* snowSystem;
@@ -117,6 +122,7 @@ bool snowingEnabled = false;
 float snowAccumulationTime = 0.0f;
 float deerX; float deerZ; float deerY;
 float bearX; float bearZ; float bearY;
+float appleX; float appleZ; float appleY;
 
 // Creating a structure to store the material parameters of an object
 struct Material
@@ -145,6 +151,8 @@ struct TexLocations {
 	GLuint bushTex1;
 	GLuint bushTex2;
 	GLuint bushTex3;
+
+	GLuint appleTex;
 
 	// sky & sun
 	GLuint skyTex;
@@ -283,7 +291,7 @@ void free() {
 	// Delete Shader Programs
 	glDeleteProgram(programs.lighting);
 	glDeleteProgram(programs.depth);
-	delete forest;
+	//delete forest;
 	delete bushes;
 	delete snowSystem;
 	glfwTerminate();
@@ -374,6 +382,11 @@ void createContext() {
 	//bearTexture = loadSOIL("assets/bear_texture.png");
 	bearTexture = loadSOIL("assets/brown_bear.png");
 
+	// load apple tree model
+	appleTreeModel = new Drawable("assets/apple.obj");
+	// apple tree texture
+	appleTexture = loadSOIL("assets/apple.png");
+
 	// model2 (sphere) is used for light visualization, keep loading it
 	sphere = new Drawable("earth.obj");
 
@@ -391,8 +404,9 @@ void createContext() {
 		glUniform3fv(nodePositions, 4, &defaultNodes[0][0]);
 	}
 	//tre oj
-	treeModel1 = new Drawable("assets/tree.obj");
-
+	//treeModel1 = new Drawable("assets/apple.obj"); //tree.obj, pinetree.obj, 
+	
+	pineTreeModel = new Drawable("assets/pinetree.obj");
 	// 3 tree textures
 	treeDiffuseTex2 = loadTextureRepeat("assets/fir.jpg");
 
@@ -402,21 +416,48 @@ void createContext() {
 
 	needleTexture = loadTextureRepeat("assets/tree2.jpg");
 
-	// FOREST SYSTEM
-	forest = new Forest(treeModel1, programs.lighting, 100); // 100 trees
-	float scale = SCALING_FACTOR; // 200
-	forest->setTerrainBounds(
+	//// FOREST SYSTEM
+	////forest = new Forest(treeModel1, programs.lighting, 100); // 100 trees
+	//float scale = SCALING_FACTOR; // 200
+	//forest->setTerrainBounds(
+	//	-scale / 2, scale / 2,  // X bounds
+	//	-scale / 2, scale / 2,  // Z bounds
+	//	0.0f, 50.0f,        // Y bounds
+	//	1.0f              // scaling factor //? the heightmap is already scaled
+	//);
+	//forest->loadTerrainBinary("assets/heightmap/terrain_data.bin");
+	//// Generate tree positions
+	//forest->generate();
+	
+
+
+	// Apple Forest 
+	float scale = SCALING_FACTOR;
+	// 1. Create Apple Forest (Mode 7, Scale 0.4)
+	appleForest = new Forest(appleTreeModel, programs.lighting, 50, 0.7f, 7);
+	appleForest->setTerrainBounds(
 		-scale / 2, scale / 2,  // X bounds
 		-scale / 2, scale / 2,  // Z bounds
 		0.0f, 50.0f,        // Y bounds
 		1.0f              // scaling factor //? the heightmap is already scaled
 	);
-	forest->loadTerrainBinary("assets/heightmap/terrain_data.bin");
-	// Generate tree positions
-	forest->generate();
+	appleForest->loadTerrainBinary("assets/heightmap/terrain_data.bin");
+	appleForest->generate(); // Generate first
 
+	// pine tree
+	pineForest = new Forest(pineTreeModel, programs.lighting, 50, 2.4f, 5);
+	pineForest->setTerrainBounds(
+		-scale / 2, scale / 2,  // X bounds
+		-scale / 2, scale / 2,  // Z bounds
+		0.0f, 50.0f,        // Y bounds
+		1.0f              // scaling factor //? the heightmap is already scaled
+	);
+	pineForest->loadTerrainBinary("assets/heightmap/terrain_data.bin");
+	// 3. Tell Pine Forest where Apple Forest is to avoid overlap
+	pineForest->addExternalPositions(appleForest->instances);
+	pineForest->generate();
 	//BUSH
-	bushModel = new Drawable("assets/bush.obj");
+	bushModel = new Drawable("assets/bush2.obj");
 	bushes= new BushField(bushModel, programs.lighting, 200);
 	bushes->setTerrainBounds(
 		-scale / 2, scale / 2,  // X bounds
@@ -425,9 +466,13 @@ void createContext() {
 		1.0f);
 	bushes->loadTerrainBinary("assets/heightmap/terrain_data.bin");
 	std::vector<glm::vec3> treePositions;
-	for (const auto& t : forest->instances)
+	/*for (const auto& t : forest->instances)
+		treePositions.push_back(t.position);*/
+	//std::vector<glm::vec3> treePositions;
+	for (const auto& t : appleForest->instances)
 		treePositions.push_back(t.position);
-
+	for (const auto& t : pineForest->instances)
+		treePositions.push_back(t.position);
 	bushes->setTreeReferences(treePositions);
 	bushes->generate();
 	
@@ -435,7 +480,7 @@ void createContext() {
 	// 3 bush textures
 	bushTexture1 = loadTextureRepeat("assets/pixel_bush.png");
 	bushTexture2 = loadTextureRepeat("assets/bush2.png");
-	bushTexture3 = loadTextureRepeat("assets/bush5.png");
+	bushTexture3 = loadTextureRepeat("assets/bush3.png");
 
 	
 
@@ -511,6 +556,7 @@ void createContext() {
 	t.needleTex = glGetUniformLocation(programs.lighting, "needleTex");
 	t.needleTex2 = glGetUniformLocation(programs.lighting, "needleTex2");
 	t.needleTex3 = glGetUniformLocation(programs.lighting, "needleTex3");
+	t.appleTex = glGetUniformLocation(programs.lighting, "appleTex");
 
 	t.bushTex1 = glGetUniformLocation(programs.lighting, "bushTex1");
 	t.bushTex2 = glGetUniformLocation(programs.lighting, "bushTex2");
@@ -660,9 +706,10 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	resetDefaultStates();
 	glUniform1i(u.useInstancing, 1);
 	glUniform1i(u.useTexture, 5); // Tree mode
+	//glUniform1i(u.useTexture, 7);
 	glUniform2f(u.uvScale, 1.0f, 1.0f); // Reset UV scale for trees
 
-	// CRITICAL FIX: Bind tree textures BEFORE drawing
+	//// CRITICAL FIX: Bind tree textures BEFORE drawing
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, trunkTexture);
 	glUniform1i(t.trunkTex, 0);
@@ -680,7 +727,54 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glBindTexture(GL_TEXTURE_2D, chrysTexture); // chrys.jpg  
 	glUniform1i(t.needleTex3, 3);
 
-	forest->draw();
+	pineForest->draw();
+	
+	//glUniform1i(u.useTexture, 7); // Same mode as deer/bear
+	//glActiveTexture(GL_TEXTURE4);
+	//glBindTexture(GL_TEXTURE_2D, appleTexture);
+	//glUniform1i(u.diffuseSampler, 4);
+	
+	// CRITICAL: Unbind terrain textures first to avoid confusion
+	/*glActiveTexture(GL_TEXTURE5);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTexture(GL_TEXTURE6);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTexture(GL_TEXTURE7);
+	glBindTexture(GL_TEXTURE_2D, 0);*/
+	/*for (int i = 5; i < 9; i++) {
+		glActiveTexture(GL_TEXTURE0 + i);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}*/
+	// Now bind tree textures in a clean state
+	//glActiveTexture(GL_TEXTURE0);
+	//glBindTexture(GL_TEXTURE_2D, trunkTexture);
+	//glUniform1i(t.trunkTex, 0);
+
+	//glActiveTexture(GL_TEXTURE1);
+	//glBindTexture(GL_TEXTURE_2D, needleTexture);
+	//glUniform1i(t.needleTex, 1);
+
+	//glActiveTexture(GL_TEXTURE2);
+	//glBindTexture(GL_TEXTURE_2D, treeDiffuseTex2);
+	//glUniform1i(t.needleTex2, 2);
+
+	//glActiveTexture(GL_TEXTURE3);
+	//glBindTexture(GL_TEXTURE_2D, chrysTexture);
+	//glUniform1i(t.needleTex3, 3);
+
+	////pine tree forest
+	//glUniform1i(u.useTexture, 5);
+	//pineForest->draw();
+
+	resetDefaultStates();
+	glUniform1i(u.useInstancing, 1);
+	glUniform1i(u.useTexture, 7);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, appleTexture);
+	glUniform1i(u.diffuseSampler, 0);
+	appleForest->draw();
+	
+	//forest->draw();
 
 	// CRITICAL: Properly disable instancing after forest
 	glUniform1i(u.useInstancing, 0);
@@ -764,12 +858,12 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	//8. DEER 
 	//LOAD DEER OBJECT 
 	resetDefaultStates();
-	glUniform1i(u.useTexture, 6); // Bush & Deer mode
+	glUniform1i(u.useTexture, 7); // Bush & Deer mode
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, deerTexture);
 	glUniform1i(u.diffuseSampler, 0);
-	deerX = 22.0f;
-	deerZ = 22.0f;
+	deerX = 18.0f;
+	deerZ = 24.0f;
 	heightData = getHeightDataOnly("assets/heightmap/terrain_data.bin");
 	deerY= sampleHeightAt(deerX, deerZ, heightData, gridRes, minX, maxX, minZ, maxZ);
 	//
@@ -782,7 +876,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	//9. BEAR 
 	//LOAD BEAR OBJECT
 	resetDefaultStates();
-	glUniform1i(u.useTexture, 6); // Bush & Deer mode
+	glUniform1i(u.useTexture, 7); // Bush & Deer & Bear mode
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, bearTexture);
 	glUniform1i(u.diffuseSampler, 0);
@@ -794,6 +888,22 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &bearM[0][0]);
 	bearModel->bind();
 	bearModel->draw();
+
+	////10. APPLE TREE
+	////LOAD APPLE TREE OBJECT
+	//resetDefaultStates();
+	//glUniform1i(u.useTexture, 7); // Same mode as deer/bear
+	//glActiveTexture(GL_TEXTURE0);
+	//glBindTexture(GL_TEXTURE_2D, appleTexture);
+	//glUniform1i(u.diffuseSampler, 0);
+	//appleX = 30.0f;
+	//appleZ = 30.0f;
+	//appleY = sampleHeightAt(appleX, appleZ, heightData, gridRes, minX, maxX, minZ, maxZ);
+	////cout << "Apple Tree Y position: " << appleY << endl;
+	//mat4 appleM = translate(mat4(1.0f), vec3(appleX, appleY, appleZ)) * scale(mat4(1.0f), vec3(1.0f));
+	//glUniformMatrix4fv(u.M, 1, GL_FALSE, &appleM[0][0]);
+	//appleTreeModel->bind();
+	//appleTreeModel->draw();
 }
 
 void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
@@ -828,7 +938,8 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 
 	// Draw forest in shadow pass
 	glUniform1i(u.useInstancing, 1);  // Enable instancing
-	forest->draw();
+	appleForest->draw();
+	pineForest->draw();
 	glUniform1i(u.useInstancing, 0);  // Disable 
 
 	// Reset to standard texturing for Suzanne and others
@@ -854,6 +965,11 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &bearM[0][0]);
 	bearModel->bind();
 	bearModel->draw();
+	////apple tree
+	//mat4 appleM = translate(mat4(1.0f), vec3(appleX, appleY, appleZ)) * scale(mat4(1.0f), vec3(1.0f));
+	//glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &appleM[0][0]);
+	//appleTreeModel->bind();
+	//appleTreeModel->draw();
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }

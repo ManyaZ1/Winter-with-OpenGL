@@ -247,6 +247,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             } else if (textureIndex == 1) {
                 texColor = texture(needleTex2, branchUV);     // fir.jpg
             } else {
+                //texColor = texture(needleTex2, branchUV);
                 texColor = texture(needleTex3, branchUV);     // chrys.jpg
             }
         if (texColor.a < 0.1) discard; 
@@ -300,9 +301,25 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         }
         if (texColor.a < 0.1) discard; 
         _Kd.rgb = texColor.rgb;
-        _Ka.rgb = 0.5 * _Kd.rgb;
+        _Ka.rgb = 0.05 * _Kd.rgb;
         _Ks.rgb = vec3(0.1); 
         _Ns = 7.0;
+    }
+    if (useTexture == 7) { // Animal Texture (Deer, Bear) + apple
+        // Direct UV mapping using the diffuseColorSampler
+        vec4 texColor = texture(diffuseColorSampler, vertex_UV);
+        
+        // Use the texture's RGB for the diffuse component
+        _Kd.rgb = texColor.rgb;
+        
+        // Define material properties for fur/skin
+        _Ka.rgb = 0.5 * _Kd.rgb; // Ambient intensity
+        _Ks.rgb = vec3(0.3);      // specularity 
+        _Ns = 10.0;               // Shininess factor
+        
+        // Optional: Discard if the texture has transparency 
+        // (usually not needed for animal skins, but good for safety)
+        if (texColor.a < 0.1) discard; 
     }
     // Phong Reflection Model
     // 1. Ambient

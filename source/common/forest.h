@@ -15,13 +15,15 @@ struct TreeInstance {
 
 class Forest {
 public:
-    Forest(Drawable* model, GLuint shaderID, int count);
+    //Forest(Drawable* model, GLuint shaderID, int count);
+    Forest(Drawable* model, GLuint shaderID, int count, float treeScale, int texMode);
     ~Forest();
 
     // Set terrain bounds for placement
     void setTerrainBounds(float minX, float maxX, float minZ, float maxZ,
         float minY, float maxY, float scale);
-
+    //help with collision detection
+    void addExternalPositions(const std::vector<TreeInstance>& otherInstances);
     // Load terrain data
     bool loadTerrainBinary(const std::string& filePath);
     void loadHeightData(const std::vector<float>& heights, int resolution);
@@ -39,6 +41,12 @@ private:
     float sampleHeight(float x, float z) const;
     float sampleMask(const std::vector<float>& mask, float x, float z) const;
     bool isValidPlacement(float x, float z, float y) const;
+    
+    // allow for many types of forests
+    float defaultScale;
+    int textureMode;
+    std::vector<glm::vec3> externalObstacles;
+
 
     Drawable* treeModel;
     GLuint shader;
