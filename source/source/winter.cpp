@@ -101,6 +101,7 @@ GLuint bushTexture3;
 //deer
 GLuint deerTexture;
 GLuint bearTexture;
+GLuint polarbearTexture;
 GLuint appleTexture;
 //snow
 GLuint snowFlakeTexture;
@@ -122,7 +123,8 @@ bool snowingEnabled = false;
 float snowAccumulationTime = 0.0f;
 float deerX; float deerZ; float deerY;
 float bearX; float bearZ; float bearY;
-float appleX; float appleZ; float appleY;
+float polarbearX; float polarbearZ; float polarbearY;
+//float appleX; float appleZ; float appleY;
 
 // Creating a structure to store the material parameters of an object
 struct Material
@@ -184,6 +186,11 @@ struct Uniforms {
 	GLuint lightDir = 0;
 	GLuint lightPos = 0;
 
+	// wind
+	GLuint wind = 0; //location of shadowmapping vertex shader for wind
+	GLuint time = 0;
+	GLuint winddepth = 0; // location of depth vertex shader for wind
+	GLuint timedepth = 0;
 	// rendering control
 	GLuint useTexture = 0;
 	GLuint useInstancing = 0;
@@ -291,7 +298,8 @@ void free() {
 	// Delete Shader Programs
 	glDeleteProgram(programs.lighting);
 	glDeleteProgram(programs.depth);
-	//delete forest;
+	delete appleForest;
+	delete pineForest;
 	delete bushes;
 	delete snowSystem;
 	glfwTerminate();
@@ -360,7 +368,11 @@ void createContext() {
 
 	//cloud
 	//uvRotationLocation = glGetUniformLocation(programs.lighting, "uvRotationAngle");
-
+	// wind
+	u.wind = glGetUniformLocation(programs.lighting, "windStrength"); //vertexshader
+	u.time = glGetUniformLocation(programs.lighting, "time");
+	u.winddepth = glGetUniformLocation(programs.depth, "windStrength"); //snow vertexshader
+	u.timedepth = glGetUniformLocation(programs.depth, "time");
 	// Loading a model
 	// The terrain object from Gaea is loaded as terrain
 	std::string modelPath = "assets/Mesher_LOD3.obj";
@@ -381,7 +393,7 @@ void createContext() {
 	// bear texture
 	//bearTexture = loadSOIL("assets/bear_texture.png");
 	bearTexture = loadSOIL("assets/brown_bear.png");
-
+	polarbearTexture = loadSOIL("assets/polar_bear.png");
 	// load apple tree model
 	appleTreeModel = new Drawable("assets/apple.obj");
 	// apple tree texture
@@ -429,8 +441,8 @@ void createContext() {
 	//// Generate tree positions
 	//forest->generate();
 	
-
-
+	// ========================================= APPLE & PINE FOREST ========================================= //
+	// ================== APPLE  FOREST ================== //
 	// Apple Forest 
 	float scale = SCALING_FACTOR;
 	// 1. Create Apple Forest (Mode 7, Scale 0.4)
@@ -444,6 +456,7 @@ void createContext() {
 	appleForest->loadTerrainBinary("assets/heightmap/terrain_data.bin");
 	appleForest->generate(); // Generate first
 
+	// ================== PINE FOREST ================== //
 	// pine tree
 	pineForest = new Forest(pineTreeModel, programs.lighting, 50, 2.4f, 5);
 	pineForest->setTerrainBounds(
@@ -456,6 +469,9 @@ void createContext() {
 	// 3. Tell Pine Forest where Apple Forest is to avoid overlap
 	pineForest->addExternalPositions(appleForest->instances);
 	pineForest->generate();
+
+	// ========================================= BUSH FIELD ========================================= //
+
 	//BUSH
 	bushModel = new Drawable("assets/bush2.obj");
 	bushes= new BushField(bushModel, programs.lighting, 200);
@@ -483,7 +499,7 @@ void createContext() {
 	bushTexture3 = loadTextureRepeat("assets/bush3.png");
 
 	
-
+	// ================================================== CLOUDS  ================================================== //
 	/* CLOUD SYSTEM */
 	// Initialize cloud system
 	cloudSystem = new CloudSystem();
@@ -884,11 +900,25 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	bearZ = -25.0f;
 	bearY = sampleHeightAt(bearX,bearZ, heightData, gridRes, minX, maxX, minZ, maxZ) ;
 	//cout << "Bear Y position: " << bearY << endl;
-	mat4 bearM = translate(mat4(1.0f), vec3(bearX, bearY, bearZ)) * scale(mat4(1.0f), vec3(1.0f));
+	mat4 bearM = translate(mat4(1.0f), vec3(bearX, bearY, bearZ)) * scale(mat4(1.0f), vec3(2.0f));
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &bearM[0][0]);
 	bearModel->bind();
 	bearModel->draw();
 
+	//10.POLAR BEAR
+	resetDefaultStates();
+	glUniform1i(u.useTexture, 7); // Bush & Deer & Bear mode
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, polarbearTexture);
+	glUniform1i(u.diffuseSampler, 0);
+	polarbearX = -22.0f;
+	polarbearZ= 39.0f;
+	polarbearY = sampleHeightAt(polarbearX, polarbearZ, heightData, gridRes, minX, maxX, minZ, maxZ);
+	//cout << "Bear Y position: " << bearY << endl;
+	mat4 polarbearM = translate(mat4(1.0f), vec3(polarbearX, polarbearY, polarbearZ)) * scale(mat4(1.0f), vec3(2.0f));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &polarbearM[0][0]);
+	bearModel->bind();
+	bearModel->draw();
 	////10. APPLE TREE
 	////LOAD APPLE TREE OBJECT
 	//resetDefaultStates();
@@ -975,6 +1005,8 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 }
 
 void mainLoop() {
+	
+
 	float lastTime = glfwGetTime();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	light->update();
@@ -993,31 +1025,25 @@ void mainLoop() {
 	glfwGetFramebufferSize(window, &fb_width, &fb_height);
 
 	do {
+		// Static variables persist between frames
+		static bool vKeyPressed = false;
+		static bool windActive = false;
 		// Calculate delta time
 		float currentTime = glfwGetTime();
 		float deltaTime = currentTime - lastTime;
 		lastTime = currentTime;
-		/*if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
-			Light::chosen_light_id = 1;
+		if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS) {
+			if (!vKeyPressed) { // Only trigger on the first frame the key is pressed
+				windActive = !windActive; // Flip the state (ON -> OFF or OFF -> ON)
+				vKeyPressed = true;
+			}
 		}
-		if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
-			Light::chosen_light_id = 2;
+		else {
+			vKeyPressed = false; // Reset flag when key is released
 		}
-		if (Light::chosen_light_id == 1) {
-			light->update();
-		}
-		else if (Light::chosen_light_id == 2) {
-			light2->update();
-		}*/
-
-		//mat4 light_proj = light->projectionMatrix;
-		//mat4 light_view = light->viewMatrix;
-		//mat4 light2_proj = light2->projectionMatrix; //hw2
-		//mat4 light2_view = light2->viewMatrix; //hw2
-		// Task 3.5
-		// Create the depth buffer
-		//depth_pass(light_view, light_proj, depthFBO); //ama einai mesa θα ριξει τα fps,   ,light2_view, light2_proj
-		//depth_pass(light2_view, light2_proj, depthFBO2); //hw2
+		// Assign the strength based on the toggle state
+		int currentWind = windActive ? 2 : 0;
+		// pass to vertex shader below
 		
 		light->update();
 		cloudSystem->update(deltaTime);
@@ -1029,6 +1055,16 @@ void mainLoop() {
 
 		// frustum fit
 		light->fitToCameraFrustum(viewMatrix, projectionMatrix);
+
+		// 4. Upload Uniforms to Shaders
+		glUseProgram(programs.lighting);
+		glUniform1i(u.wind, currentWind);
+		glUniform1f(u.time, currentTime);
+
+		glUseProgram(programs.depth);
+		glUniform1i(u.winddepth ,currentWind);
+		glUniform1f(u.timedepth, currentTime);
+
 
 		// Re-fetch updated light matrices
 		mat4 light_proj = light->projectionMatrix;
@@ -1053,6 +1089,7 @@ void mainLoop() {
 			lighting_pass(viewMatrix, projectionMatrix, fb_width, fb_height);
 		}
 
+		// Add cloud on C key press
 		if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
 			// Spawn cloud at random position
 			vec3 pos = vec3(
@@ -1065,6 +1102,8 @@ void mainLoop() {
 		}
 		static bool gKeyPressed = false;  // MOVE OUTSIDE the if statement
 
+
+		// Toggle snow system on G key press
 		if (glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS) {
 			if (!gKeyPressed) { // Toggle only on initial press
 				// ADD: CLOUDS COVERING THE SKY?
@@ -1104,10 +1143,8 @@ void mainLoop() {
 		glUniformMatrix4fv(u.V, 1, GL_FALSE, &viewMatrix[0][0]);
 		glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
 		cloudSystem->render(viewMatrix, projectionMatrix);
-		// Task 2.2:
-		//renderMiniMap();
-
-
+		
+		
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	} while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS &&

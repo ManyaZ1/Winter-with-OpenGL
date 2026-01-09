@@ -12,6 +12,8 @@ layout(location = 7) in vec4 instanceMatrix_row3;
 // Per-instance texture index
 layout(location = 8) in int instanceTextureIndex;
 uniform bool useInstancing; 
+uniform int windStrength ;
+uniform float time;
 // ================================================
 
 
@@ -108,41 +110,53 @@ void main() {
         return;
     }
     // ===== TREE SECTION =====
-    else if(useTexture == 5){
-        // PHYSICS LOGIC FOR 10m TREE
-        float h = clamp(vertexPosition_modelspace.y / treeTotalHeight, 0.0, 1.0);
-
-        vec3 currentOffset;
-        //  4-cylinder logic (0.25 segments)
-        if (h < 0.25) {
-            currentOffset = mix(nodePositions[0], nodePositions[1], h / 0.25);
-        } else if (h < 0.50) {
-            currentOffset = mix(nodePositions[1], nodePositions[2], (h - 0.25) / 0.25);
-        } else if (h < 0.75) {
-            currentOffset = mix(nodePositions[2], nodePositions[3], (h - 0.50) / 0.25);
-        } else {
-            // Top segment
-            currentOffset = nodePositions[3]; // Or further interpolation if needed
-        }
-
-        vec3 bentPosition = vertexPosition_modelspace + currentOffset;
-        
-        // USE modelMatrix instead of M
-       gl_Position = P * V * modelMatrix * vec4(bentPosition, 1.0);
-        vertex_position_cameraspace = V * modelMatrix * vec4(bentPosition, 1.0);
-        vertex_normal_cameraspace = mat4(transpose(inverse(mat3(V * modelMatrix)))) * vec4(vertexNormal_modelspace, 0);
-        vertex_UV = vertexUV * uvScale;
-        vertex_position_lightspace = lightVP * modelMatrix * vec4(bentPosition, 1.0);
+//    else if(useTexture == 5){
+//        // PHYSICS LOGIC FOR 10m TREE
+//        float h = clamp(vertexPosition_modelspace.y / treeTotalHeight, 0.0, 1.0);
+//
+//        vec3 currentOffset;
+//        //  4-cylinder logic (0.25 segments)
+//        if (h < 0.25) {
+//            currentOffset = mix(nodePositions[0], nodePositions[1], h / 0.25);
+//        } else if (h < 0.50) {
+//            currentOffset = mix(nodePositions[1], nodePositions[2], (h - 0.25) / 0.25);
+//        } else if (h < 0.75) {
+//            currentOffset = mix(nodePositions[2], nodePositions[3], (h - 0.50) / 0.25);
+//        } else {
+//            // Top segment
+//            currentOffset = nodePositions[3]; // Or further interpolation if needed
+//        }
+//
+//        vec3 bentPosition = vertexPosition_modelspace + currentOffset;
+//        
+//        // USE modelMatrix instead of M
+//       gl_Position = P * V * modelMatrix * vec4(bentPosition, 1.0);
+//        vertex_position_cameraspace = V * modelMatrix * vec4(bentPosition, 1.0);
+//        vertex_normal_cameraspace = mat4(transpose(inverse(mat3(V * modelMatrix)))) * vec4(vertexNormal_modelspace, 0);
+//        vertex_UV = vertexUV * uvScale;
+//        vertex_position_lightspace = lightVP * modelMatrix * vec4(bentPosition, 1.0);
+//    }
+    vec3 pos = vertexPosition_modelspace;
+    // ===== WIND LOGIC =====
+    if (useInstancing && windStrength> 0){
+        float phaseOffset = modelMatrix[3].x + modelMatrix[3].z;
+        float swayFactor = pos.y * float(windStrength) * 0.05;
+        float wave = sin(time * 2.0 + phaseOffset);
+        // Apply displacement to X and Z coordinates
+        pos.x += wave * swayFactor;
+        pos.z += wave * swayFactor * 0.5;
     }
-    else {
+
+    //else {
         
     // Output position of the vertex
-    gl_Position = P * V * modelMatrix * vec4(vertexPosition_modelspace, 1);
+    //gl_Position = P * V * modelMatrix * vec4(vertexPosition_modelspace, 1);
+    gl_Position = P * V * modelMatrix * vec4(pos, 1.0);
     vertex_position_cameraspace = V * modelMatrix * vec4(vertexPosition_modelspace, 1);
     vertex_normal_cameraspace = mat4(transpose(inverse(mat3(V * modelMatrix)))) * vec4(vertexNormal_modelspace, 0);
     vertex_UV = vertexUV;
     
     vertex_position_lightspace = lightVP * modelMatrix * vec4(vertexPosition_modelspace, 1);
-    }
+    //}
     vertex_UV_tiled = vertexUV * uvScale;
 }

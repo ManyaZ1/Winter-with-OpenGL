@@ -9,7 +9,9 @@ layout(location = 6) in vec4 instanceMatrix_row2;
 layout(location = 7) in vec4 instanceMatrix_row3;
 layout(location = 8) in int instanceTextureIndex;
 // =====================================
-
+// Wind Uniforms
+uniform int windStrength;
+uniform float time;
 uniform bool useInstancing; 
 
 // Values that stay constant for the whole mesh.
@@ -35,9 +37,19 @@ void main() {
         modelMatrix = M;
     }
     // =============================
-    
+    vec3 pos = vertexPosition_modelspace;
+    // Apply EXACT SAME wind logic as lighting shader
+    if (useInstancing && windStrength > 0) {
+        float phaseOffset = modelMatrix[3].x + modelMatrix[3].z;
+        float swayFactor = pos.y * float(windStrength) * 0.05; 
+        float wave = sin(time * 2.0 + phaseOffset);
+        
+        pos.x += wave * swayFactor;
+        pos.z += wave * swayFactor * 0.5;
+    }
     // Transform to light space
-    gl_Position = VP * modelMatrix * vec4(vertexPosition_modelspace, 1.0);
+    gl_Position = VP * modelMatrix * vec4(pos, 1.0);
+    //gl_Position = VP * modelMatrix * vec4(vertexPosition_modelspace, 1.0);
 }
 
 

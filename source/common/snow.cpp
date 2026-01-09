@@ -83,10 +83,10 @@ void SnowSystem::update(float deltaTime, glm::vec3 cameraPos) {
 
 void SnowSystem::render(glm::mat4 viewMatrix, glm::mat4 projectionMatrix) {
     if (!isSnowing) {
-        std::cout << "Snow render skipped - not snowing" << std::endl;
+        //std::cout << "Snow render skipped - not snowing" << std::endl;
         return;
     }
-    std::cout << "Rendering " << particles.size() << " snow particles" << std::endl;
+    //std::cout << "Rendering " << particles.size() << " snow particles" << std::endl;
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDepthMask(GL_FALSE); // Don't write to depth buffer
