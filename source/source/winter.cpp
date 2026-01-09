@@ -25,6 +25,11 @@
 #include "common/snow.h"
 #include <vector>
 
+#define AM_IMPLEMENTATION  // This "activates" the audio code here
+#include "../common/AudioManager.h"
+
+AudioManager audio;
+
 #define SCALING_FACTOR 200//60 //lab.cpp kai camera.cpp
 
 using namespace std;
@@ -1043,6 +1048,9 @@ void mainLoop() {
 		}
 		// Assign the strength based on the toggle state
 		int currentWind = windActive ? 2 : 0;
+		if (windActive) {
+			audio.playPreloaded("wind", true);
+		}
 		// pass to vertex shader below
 		
 		light->update();
@@ -1076,7 +1084,6 @@ void mainLoop() {
 		//αν σταθερη φωτεινη πηγη δεν εχει νοημα να το κανω καθε frame
 		// κάθε δευτερόλεπτο
 
-		// Task 1.5
 		// Rendering the scene from light's perspective when F1 is pressed
 
 		if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS) {
@@ -1104,6 +1111,7 @@ void mainLoop() {
 
 
 		// Toggle snow system on G key press
+		// and add fog
 		if (glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS) {
 			if (!gKeyPressed) { // Toggle only on initial press
 				// ADD: CLOUDS COVERING THE SKY?
@@ -1144,6 +1152,14 @@ void mainLoop() {
 		glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
 		cloudSystem->render(viewMatrix, projectionMatrix);
 		
+		//if x is pressed delete all clouds 
+		// clear clouds
+		// delete fog
+		// stop snow turn it off if on if already off do nothing
+		if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) {
+			//delete cloudSystem;
+			//cloudSystem->clearClouds();
+		}
 		
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -1262,7 +1278,7 @@ void initialize() {
 int main(void) {
 	try {
 		initialize();
-		
+		audio.preload("wind", "sfx/wind.mp3");
 		createContext();
 		mainLoop();
 		free();

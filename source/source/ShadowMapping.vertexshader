@@ -139,9 +139,9 @@ void main() {
     vec3 pos = vertexPosition_modelspace;
     // ===== WIND LOGIC =====
     if (useInstancing && windStrength> 0){
-        float phaseOffset = modelMatrix[3].x + modelMatrix[3].z;
-        float swayFactor = pos.y * float(windStrength) * 0.05;
-        float wave = sin(time * 2.0 + phaseOffset);
+        float phaseOffset = modelMatrix[3].x + modelMatrix[3].z; //unique gia ka8e object
+        float swayFactor = pos.y * float(windStrength) * 0.01; // oso pio pshla toso pio entono
+        float wave = sin(time * 2.0 + phaseOffset); 
         // Apply displacement to X and Z coordinates
         pos.x += wave * swayFactor;
         pos.z += wave * swayFactor * 0.5;

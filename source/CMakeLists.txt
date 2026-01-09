@@ -77,7 +77,7 @@ include_directories(
   external/Simple-OpenGL-Image-Library/include/
   external/tinyxml2/include/
   external/tinyobjloader/include/
-  thirdparty/stb
+ external/miniaudio.h
   .
   )
 
@@ -123,6 +123,7 @@ add_executable(source
   common/bush.cpp
   common/snow.h
   common/snow.cpp
+  common/AudioManager.h
 
   source/ShadowMapping.fragmentshader
   source/ShadowMapping.vertexshader
@@ -135,6 +136,9 @@ add_executable(source
   )
 target_link_libraries(source
   ${ALL_LIBS}
+  ole32
+  winmm
+  advapi32
   )
 # Xcode and Visual working directories
 set_target_properties(source
