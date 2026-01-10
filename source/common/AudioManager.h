@@ -61,6 +61,25 @@ public:
     inline void playEffect(const std::string& filePath) {
         ma_engine_play_sound(&engine, filePath.c_str(), NULL);
     }
+    // Add this inside your AudioManager class in AudioManager.h
+
+    inline void stopPreloaded(const std::string& name) {
+        if (soundLibrary.find(name) != soundLibrary.end()) {
+            ma_sound_stop(soundLibrary[name]);
+
+            // Optional: Rewind the sound to the start so it plays 
+            // from the beginning next time you call playPreloaded
+            ma_sound_seek_to_pcm_frame(soundLibrary[name], 0);
+        }
+    }
+
+    inline void stopAll() {
+        // This tells the entire engine to stop processing audio
+        ma_engine_stop(&engine);
+
+        // To restart the engine later (if needed)
+        // ma_engine_start(&engine);
+    }
 };
 extern AudioManager audio;
 #endif

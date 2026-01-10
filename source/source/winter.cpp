@@ -139,7 +139,14 @@ struct Material
 	vec4 Ks;
 	float Ns;
 };
-
+//wind struct
+struct WindState {
+	bool active = false;
+	int strength = 0;
+	float xBias = 0.0f;
+	float zBias = 0.0f;
+};
+void updateWind(GLFWwindow* window,WindState& wind,bool& vKeyPressed,float biasStep);
 struct TexLocations {
 	// terrain
 	GLuint terrainTex;
@@ -196,6 +203,14 @@ struct Uniforms {
 	GLuint time = 0;
 	GLuint winddepth = 0; // location of depth vertex shader for wind
 	GLuint timedepth = 0;
+	GLuint snowtime =0;
+	GLuint snowWind;
+	GLuint xbias = 0; // x_bias for wind direction
+	GLuint zbias = 0; // z_bias for wind direction
+	GLuint xbiasdepth = 0; // x_bias for depth shader
+	GLuint zbiasdepth = 0; // z_bias for depth shader
+	GLuint xbiassnow = 0; // x_bias for snow shader
+	GLuint zbiassnow = 0; // z_bias for snow shader
 	// rendering control
 	GLuint useTexture = 0;
 	GLuint useInstancing = 0;
@@ -218,6 +233,7 @@ TexLocations t;
 std::vector<float> heightData;
 
 GLuint loadTextureRepeat(const std::string& path) {
+	//replace repeat lines, load repeat texture to shader with one line
 	GLuint tex = loadSOIL(path.c_str());
 	glBindTexture(GL_TEXTURE_2D, tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -226,6 +242,12 @@ GLuint loadTextureRepeat(const std::string& path) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	return tex;
 }
+//replaces these blocks as well
+/*waterTexture = loadSOIL("assets/water.bmp");
+glBindTexture(GL_TEXTURE_2D, waterTexture);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); */
+
 
 // NOTE: Since the Light and Material struct are used in the shader programs as well 
 //		 it is recommended to create a function that will update all the parameters 
@@ -378,6 +400,16 @@ void createContext() {
 	u.time = glGetUniformLocation(programs.lighting, "time");
 	u.winddepth = glGetUniformLocation(programs.depth, "windStrength"); //snow vertexshader
 	u.timedepth = glGetUniformLocation(programs.depth, "time");
+	u.snowWind = glGetUniformLocation(programs.snow, "windStrength");
+	u.snowtime = glGetUniformLocation(programs.snow, "time");
+	
+	// wind bias (direction)
+	u.xbias = glGetUniformLocation(programs.lighting, "x_bias");
+	u.zbias = glGetUniformLocation(programs.lighting, "z_bias");
+	u.xbiasdepth = glGetUniformLocation(programs.depth, "x_bias");
+	u.zbiasdepth = glGetUniformLocation(programs.depth, "z_bias");
+	u.xbiassnow = glGetUniformLocation(programs.snow, "x_bias");
+	u.zbiassnow = glGetUniformLocation(programs.snow, "z_bias");
 	// Loading a model
 	// The terrain object from Gaea is loaded as terrain
 	std::string modelPath = "assets/Mesher_LOD3.obj";
@@ -487,9 +519,7 @@ void createContext() {
 		1.0f);
 	bushes->loadTerrainBinary("assets/heightmap/terrain_data.bin");
 	std::vector<glm::vec3> treePositions;
-	/*for (const auto& t : forest->instances)
-		treePositions.push_back(t.position);*/
-	//std::vector<glm::vec3> treePositions;
+	// Get tree positions from both forests
 	for (const auto& t : appleForest->instances)
 		treePositions.push_back(t.position);
 	for (const auto& t : pineForest->instances)
@@ -520,29 +550,19 @@ void createContext() {
 	createDepthFBOAndTexture(depthFBO, depthTexture);
 
 	// Homework 2: create second depth FBO and texture
-	/*createDepthFBOAndTexture(depthFBO2, depthTexture2);*/
 
 	/* load textures */
-	terrainTexture = loadSOIL("assets/aerial_rocks.bmp");
-	glBindTexture(GL_TEXTURE_2D, terrainTexture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	 terrainTexture2 = loadSOIL("assets/grass2.bmp");
-	 glBindTexture(GL_TEXTURE_2D, terrainTexture2);
-	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	 waterTexture = loadSOIL("assets/water.bmp");
+	terrainTexture = loadTextureRepeat("assets/aerial_rocks.bmp");
+	 terrainTexture2 = loadTextureRepeat("assets/grass2.bmp");
+	 
+	 waterTexture = loadTextureRepeat("assets/water.bmp");
+	 /*waterTexture = loadSOIL("assets/water.bmp");
 	 glBindTexture(GL_TEXTURE_2D, waterTexture);
 	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	 waterTexture2 = loadSOIL("assets/water2.bmp");
-	 glBindTexture(GL_TEXTURE_2D, waterTexture2);
-	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	bottomTexture = loadSOIL("assets/water.bmp");
-	glBindTexture(GL_TEXTURE_2D, bottomTexture);
-	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);*/
+	 waterTexture2 = loadTextureRepeat("assets/water2.bmp");
+
+	bottomTexture = loadTextureRepeat("assets/water.bmp");
 	maskTexture = loadSOIL("assets/lake_mask.bmp");
 
 	sunTexture = loadSOIL("assets/fiery.bmp");
@@ -879,6 +899,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	//8. DEER 
 	//LOAD DEER OBJECT 
 	resetDefaultStates();
+	glUniform1i(u.useInstancing, 0);
 	glUniform1i(u.useTexture, 7); // Bush & Deer mode
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, deerTexture);
@@ -1005,8 +1026,54 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 	//glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &appleM[0][0]);
 	//appleTreeModel->bind();
 	//appleTreeModel->draw();
-
+	//polar bear
+	mat4 polarbearM = translate(mat4(1.0f), vec3(polarbearX, polarbearY, polarbearZ)) * scale(mat4(1.0f), vec3(2.0f));
+	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &polarbearM[0][0]);
+	bearModel->bind();
+	bearModel->draw();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+void updateWind(
+	GLFWwindow* window,
+	WindState& wind,
+	bool& vKeyPressed,
+	float biasStep = 0.05f
+) {
+	// Toggle wind
+	if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS) {
+		if (!vKeyPressed) {
+			wind.active = !wind.active;
+			wind.strength = wind.active ? 2 : 0;
+
+			if (!wind.active) {
+				wind.xBias = 0.0f;
+				wind.zBias = 0.0f;
+			}
+
+			vKeyPressed = true;
+			if(wind.active)
+				audio.playPreloaded("wind", true);
+			else
+				audio.stopPreloaded("wind");
+		}
+	}
+	else {
+		vKeyPressed = false;
+	}
+
+	if (!wind.active) return;
+
+	// X bias
+	if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS)
+		wind.xBias += biasStep;
+	if (glfwGetKey(window, GLFW_KEY_N) == GLFW_PRESS)
+		wind.xBias -= biasStep;
+
+	// Z bias
+	if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS)
+		wind.zBias += biasStep;
+	if (glfwGetKey(window, GLFW_KEY_COMMA) == GLFW_PRESS)
+		wind.zBias -= biasStep;
 }
 
 void mainLoop() {
@@ -1031,28 +1098,14 @@ void mainLoop() {
 
 	do {
 		// Static variables persist between frames
-		static bool vKeyPressed = false;
-		static bool windActive = false;
+		//static bool vKeyPressed = false;
+		//static bool windActive = false;
 		// Calculate delta time
 		float currentTime = glfwGetTime();
 		float deltaTime = currentTime - lastTime;
 		lastTime = currentTime;
-		if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS) {
-			if (!vKeyPressed) { // Only trigger on the first frame the key is pressed
-				windActive = !windActive; // Flip the state (ON -> OFF or OFF -> ON)
-				vKeyPressed = true;
-			}
-		}
-		else {
-			vKeyPressed = false; // Reset flag when key is released
-		}
-		// Assign the strength based on the toggle state
-		int currentWind = windActive ? 2 : 0;
-		if (windActive) {
-			audio.playPreloaded("wind", true);
-		}
-		// pass to vertex shader below
-		
+
+		// Update light and cloud system
 		light->update();
 		cloudSystem->update(deltaTime);
 
@@ -1063,16 +1116,6 @@ void mainLoop() {
 
 		// frustum fit
 		light->fitToCameraFrustum(viewMatrix, projectionMatrix);
-
-		// 4. Upload Uniforms to Shaders
-		glUseProgram(programs.lighting);
-		glUniform1i(u.wind, currentWind);
-		glUniform1f(u.time, currentTime);
-
-		glUseProgram(programs.depth);
-		glUniform1i(u.winddepth ,currentWind);
-		glUniform1f(u.timedepth, currentTime);
-
 
 		// Re-fetch updated light matrices
 		mat4 light_proj = light->projectionMatrix;
@@ -1109,6 +1152,30 @@ void mainLoop() {
 		}
 		static bool gKeyPressed = false;  // MOVE OUTSIDE the if statement
 
+		//// WIND ON
+		static WindState wind;
+		static bool vKeyPressed = false;
+
+		updateWind(window, wind, vKeyPressed);
+
+		// Upload uniforms
+		glUseProgram(programs.lighting);
+		glUniform1i(u.wind, wind.strength);
+		glUniform1f(u.time, currentTime);
+		glUniform1f(u.xbias, wind.xBias);
+		glUniform1f(u.zbias, wind.zBias);
+
+		glUseProgram(programs.depth);
+		glUniform1i(u.winddepth, wind.strength);
+		glUniform1f(u.timedepth, currentTime);
+		glUniform1f(u.xbiasdepth, wind.xBias);
+		glUniform1f(u.zbiasdepth, wind.zBias);
+
+		glUseProgram(programs.snow);
+		glUniform1i(u.snowWind, wind.strength);
+		glUniform1f(u.snowtime, currentTime);
+		glUniform1f(u.xbiassnow, wind.xBias);
+		glUniform1f(u.zbiassnow, wind.zBias);
 
 		// Toggle snow system on G key press
 		// and add fog
@@ -1138,6 +1205,11 @@ void mainLoop() {
 		
 		// Update snow system
 		snowSystem->update(deltaTime, camera->position);
+		if(wind.active)
+			snowSystem->update_velocity(wind.xBias, wind.zBias);
+		else
+			snowSystem->update_velocity(0.0, 0.0);
+
 		// Track accumulation time
 		if (snowingEnabled) {
 			snowAccumulationTime += deltaTime;
@@ -1238,7 +1310,8 @@ void initialize() {
 	glfwSetCursorPos(window, W_WIDTH / 2, W_HEIGHT / 2);
 
 	// Gray background color
-	glClearColor(0.27f, 0.537f, 0.725f, 0.0f);
+	glClearColor(0.8f, 0.85f, 0.9f, 1.0f);
+	//glClearColor(0.27f, 0.537f, 0.725f, 0.0f);
 
 	// Enable depth test
 	glEnable(GL_DEPTH_TEST);

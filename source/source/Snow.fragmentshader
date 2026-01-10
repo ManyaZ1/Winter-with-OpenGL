@@ -2,11 +2,20 @@
 #version 330 core
 
 out vec4 FragColor;
-uniform sampler2D snowTexture;
 
 void main() {
-    vec4 texColor = texture(snowTexture, gl_PointCoord);
-    if (texColor.a < 0.01) discard; //now it appears!
+    // Calculate distance from center of point sprite
+    vec2 coord = gl_PointCoord - vec2(0.5);
+    float dist = length(coord);
     
-    FragColor = vec4(1.0, 1.0, 1.0, texColor.a * 0.8);
+    // Create circular shape - discard pixels outside circle
+    if (dist > 0.5) {
+        discard;
+    }
+    
+    // Soft edge with smooth falloff
+    float alpha = 1.0 - smoothstep(0.3, 0.5, dist);
+    
+    // White color with soft alpha
+    FragColor = vec4(1.0, 1.0, 1.0, alpha * 0.9);
 }

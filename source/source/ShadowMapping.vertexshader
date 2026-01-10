@@ -11,8 +11,12 @@ layout(location = 6) in vec4 instanceMatrix_row2;
 layout(location = 7) in vec4 instanceMatrix_row3;
 // Per-instance texture index
 layout(location = 8) in int instanceTextureIndex;
+uniform int useTexture;
+
 uniform bool useInstancing; 
 uniform int windStrength ;
+uniform float x_bias;
+uniform float z_bias;
 uniform float time;
 // ================================================
 
@@ -49,7 +53,6 @@ uniform float normDir;
 uniform vec2 uvScale; 
 out vec2 vertex_UV_tiled;
 out vec3 fragPos_modelspace;
-uniform int useTexture;
 
 // ===== ADD THIS NEW OUTPUT FOR FRAGMENT SHADER =====
 flat out int textureIndex;
@@ -109,6 +112,45 @@ void main() {
         vertex_UV = vec2(0.0);
         return;
     }
+
+    vec3 pos = vertexPosition_modelspace;
+    // ===== WIND LOGIC =====
+    if(windStrength>0){
+        float phaseOffset = modelMatrix[3].x + modelMatrix[3].z; //unique gia ka8e object
+        float swayFactor = pos.y * float(windStrength) * 0.01; // oso pio pshla toso pio entono
+        float wave_x = sin(time * 2.0 + phaseOffset)  * (1.0+x_bias)      ; 
+        float wave_z = cos(time * 1.5 + phaseOffset*1.5) * (1.0+z_bias)   ;
+        if (useInstancing){
+            // Apply displacement to X and Z coordinates
+            pos.x += wave_x * swayFactor;
+            pos.z += wave_z * swayFactor ;
+        }
+        if (windStrength> 0 && useTexture == 7 && !useInstancing){//bear,deer and not instancing therefore not 
+            pos.x += wave_x *  swayFactor *0.1  ;// * x_bias
+            pos.z += wave_z * swayFactor *0.1 ;// * z_bias
+        }
+    }
+    //make animals breathe
+    if (useTexture==7 && !useInstancing){
+        float breatheFactor = pos.y * 0.01; // oso pio pshla toso pio entono
+        float breathe = sin(time *3.0) *breatheFactor* 0.5;
+        pos.y += breathe;
+    }
+    //else {
+        
+    // Output position of the vertex
+    //gl_Position = P * V * modelMatrix * vec4(vertexPosition_modelspace, 1);
+    gl_Position = P * V * modelMatrix * vec4(pos, 1.0);
+    vertex_position_cameraspace = V * modelMatrix * vec4(vertexPosition_modelspace, 1);
+    vertex_normal_cameraspace = mat4(transpose(inverse(mat3(V * modelMatrix)))) * vec4(vertexNormal_modelspace, 0);
+    vertex_UV = vertexUV;
+    
+    vertex_position_lightspace = lightVP * modelMatrix * vec4(vertexPosition_modelspace, 1);
+    //}
+    vertex_UV_tiled = vertexUV * uvScale;
+}
+
+
     // ===== TREE SECTION =====
 //    else if(useTexture == 5){
 //        // PHYSICS LOGIC FOR 10m TREE
@@ -136,27 +178,3 @@ void main() {
 //        vertex_UV = vertexUV * uvScale;
 //        vertex_position_lightspace = lightVP * modelMatrix * vec4(bentPosition, 1.0);
 //    }
-    vec3 pos = vertexPosition_modelspace;
-    // ===== WIND LOGIC =====
-    if (useInstancing && windStrength> 0){
-        float phaseOffset = modelMatrix[3].x + modelMatrix[3].z; //unique gia ka8e object
-        float swayFactor = pos.y * float(windStrength) * 0.01; // oso pio pshla toso pio entono
-        float wave = sin(time * 2.0 + phaseOffset); 
-        // Apply displacement to X and Z coordinates
-        pos.x += wave * swayFactor;
-        pos.z += wave * swayFactor * 0.5;
-    }
-
-    //else {
-        
-    // Output position of the vertex
-    //gl_Position = P * V * modelMatrix * vec4(vertexPosition_modelspace, 1);
-    gl_Position = P * V * modelMatrix * vec4(pos, 1.0);
-    vertex_position_cameraspace = V * modelMatrix * vec4(vertexPosition_modelspace, 1);
-    vertex_normal_cameraspace = mat4(transpose(inverse(mat3(V * modelMatrix)))) * vec4(vertexNormal_modelspace, 0);
-    vertex_UV = vertexUV;
-    
-    vertex_position_lightspace = lightVP * modelMatrix * vec4(vertexPosition_modelspace, 1);
-    //}
-    vertex_UV_tiled = vertexUV * uvScale;
-}

@@ -31,6 +31,7 @@ public:
 
     void initialize(GLuint program, GLuint texture);
     void update(float deltaTime, glm::vec3 cameraPos);
+    void update_velocity(float x_offset, float z_offset);
     void render(glm::mat4 viewMatrix, glm::mat4 projectionMatrix);
     void toggle(); // Start/stop snowing
     bool isActive() { return isSnowing; }

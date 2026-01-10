@@ -44,6 +44,10 @@ uniform sampler2D bushTex2;  // Slot 1 (Bush PNG)
 uniform sampler2D bushTex3;  // Slot 2 (Bush PNG)
 // ===========================================================
 uniform sampler2D diffuseColorSampler; // Slot 2 (Bush PNG)
+// ====================================================== fog
+uniform float fogDensity;// =0.5; // 0.0 to 1.0
+uniform vec3 fogColor;//= vec3(0.8, 0.85, 0.9);;
+
 //uniform sampler2D barkSampler;    //  (Slot 0)
 //uniform sampler2D needleSampler;  //  (Slot 1)
 
@@ -85,6 +89,27 @@ void main() {
         fragmentColor = vec4(sunColor.rgb, 1.0);
         return;
     }
+    // If using the sky texture, output it directly and skip the rest
+    if (useTexture == 3) {
+        // spherical mapping in fragment shader
+        vec3 p = normalize(fragPos_modelspace);
+
+        float pi = 3.14159265358979323846;
+
+        // NOTE: use atan(z,x) so longitude runs correctly around sphere
+        float u = atan(p.z, p.x) / (2.0 * pi) + 0.5;
+        float v = asin(clamp(p.y, -1.0, 1.0)) / pi + 0.5;
+
+        // fold into [0,1), safe for repeat-wrapped texture
+        u = fract(u);
+        v = clamp(v, 0.0, 1.0);
+
+        fragmentColor = vec4(texture(skyTex, vec2(u, v)).rgb, 1.0);
+        return;
+    }
+
+    //fog will be applied
+    
     // Mode 4 for simple textured billboards (clouds)
     if (useTexture == 4) {
         //vec4 texColor = texture(sunTex, vertex_UV);
@@ -111,27 +136,8 @@ void main() {
         // -----------------------------------
         
         fragmentColor = texColor; // Use RGB and Alpha directly
-        return;
+        //return;
     }
-    // If using the sky texture, output it directly and skip the rest
-    if (useTexture == 3) {
-        // spherical mapping in fragment shader
-        vec3 p = normalize(fragPos_modelspace);
-
-        float pi = 3.14159265358979323846;
-
-        // NOTE: use atan(z,x) so longitude runs correctly around sphere
-        float u = atan(p.z, p.x) / (2.0 * pi) + 0.5;
-        float v = asin(clamp(p.y, -1.0, 1.0)) / pi + 0.5;
-
-        // fold into [0,1), safe for repeat-wrapped texture
-        u = fract(u);
-        v = clamp(v, 0.0, 1.0);
-
-        fragmentColor = vec4(texture(skyTex, vec2(u, v)).rgb, 1.0);
-        return;
-    }
-
     else {
     // --- LIGHT 1  ---
         float shadow1 = ShadowCalculation(vertex_position_lightspace, shadowMapSampler);
@@ -140,6 +146,12 @@ void main() {
         vec3 color1 = calculatePhong(light, vec4(0,0,0,1), visibility1); 
         fragmentColor = vec4(color1, 1.0);
     }
+    float dist = length(vertex_position_cameraspace.xyz);
+    float fogDensityScaled = fogDensity * 0.03;
+    float fogFactor = 1.0 / exp((dist * fogDensityScaled) * (dist * fogDensityScaled));
+    fogFactor = clamp(fogFactor, 0.0, 1.0);
+    fragmentColor.rgb = mix(fogColor, fragmentColor.rgb, fogFactor);
+    return;
 }
 
 
@@ -314,8 +326,8 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         
         // Define material properties for fur/skin
         _Ka.rgb = 0.5 * _Kd.rgb; // Ambient intensity
-        _Ks.rgb = vec3(0.3);      // specularity 
-        _Ns = 10.0;               // Shininess factor
+        _Ks.rgb = vec3(0.1);      // specularity 
+        _Ns = 3.0;               // Shininess factor
         
         // Optional: Discard if the texture has transparency 
         // (usually not needed for animal skins, but good for safety)

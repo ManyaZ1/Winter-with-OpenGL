@@ -4,11 +4,30 @@
 layout(location = 0) in vec3 vertexPosition;
 layout(location = 1) in float particleSize;
 
-uniform mat4 VP; // View-Projection matrix
+uniform mat4 VP; // View-Projecti on matrix
 uniform mat4 M;  // Model matrix
-
+uniform int windStrength ;
+uniform float x_bias;
+uniform float z_bias;
+uniform float time;
 void main() {
     vec4 worldPos = M * vec4(vertexPosition, 1.0);
+
+//    //wind
+//    if (windStrength > 0) {
+//
+//        // Wind strength scaling
+//        float strength = 2*float(windStrength);
+//
+//        // Height-based influence (more wind higher up)
+//        //float heightFactor = clamp(worldPos.y / 40.0, 0.0, 1.0);
+//
+//        vec2 windOffset= vec2(x_bias*strength,z_bias*strength );
+//        worldPos.x += (x_bias-1) * strength * time * 0.2 ;
+//        worldPos.z += (z_bias-1) * strength * time * 0.2;
+////        worldPos.x += windOffset.x;
+////        worldPos.z += windOffset.y;
+//    }
     gl_Position = VP * worldPos;
     
     // Scale point size with distance

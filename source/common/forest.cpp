@@ -7,7 +7,7 @@
 static constexpr float TREE_MIN_HEIGHT = 3.0f;//8.0f;
 static constexpr float TREE_MAX_HEIGHT = 28.0f;// Raised from 28.0
 
-static constexpr float MIN_TREE_TREE_DIST = 4.0f;   // tune this
+static constexpr float MIN_TREE_TREE_DIST = 5.0f;   // tune this
 static constexpr float MIN_TREE_BUSH_DIST = 2.0f; // tune this
 
 //Forest::Forest(Drawable* model, GLuint shaderID, int count)
