@@ -1033,12 +1033,7 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 	bearModel->draw();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
-void updateWind(
-	GLFWwindow* window,
-	WindState& wind,
-	bool& vKeyPressed,
-	float biasStep = 0.05f
-) {
+void updateWind(	GLFWwindow* window,	WindState& wind,	bool& vKeyPressed,	float biasStep = 0.05f) {
 	// Toggle wind
 	if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS) {
 		if (!vKeyPressed) {
@@ -1074,6 +1069,7 @@ void updateWind(
 		wind.zBias += biasStep;
 	if (glfwGetKey(window, GLFW_KEY_COMMA) == GLFW_PRESS)
 		wind.zBias -= biasStep;
+
 }
 
 void mainLoop() {

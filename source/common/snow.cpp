@@ -242,11 +242,22 @@ void SnowSystem::update(float deltaTime, glm::vec3 cameraPos) {
         }
     }
 }
-void SnowSystem::update_velocity(float x_offset, float z_offset) {
-    if (!isSnowing) return;
+//void SnowSystem::update_velocity(float x_offset, float z_offset) {
+//    if (!isSnowing) return;
+//    for (auto& p : particles) {
+//        p.velocity.x += x_offset*0.01;
+//        p.velocity.z += z_offset*0.01;
+//    }
+//}
+//improve physics
+void SnowSystem::update_velocity(float targetWindX, float targetWindZ) { //add *deltaTime?
+    float airResistance = 0.7f; // How quickly snow matches wind (0.0 to 1.0)
+
     for (auto& p : particles) {
-        p.velocity.x += x_offset*0.01;
-        p.velocity.z += z_offset*0.01;
+        // Instead of += (which is infinite acceleration), 
+        // we "nudge" the current velocity toward the target wind speed.
+        p.velocity.x += (targetWindX - p.velocity.x) * airResistance ;
+        p.velocity.z += (targetWindZ - p.velocity.z) * airResistance ;
     }
 }
 void SnowSystem::render(glm::mat4 viewMatrix, glm::mat4 projectionMatrix) {
