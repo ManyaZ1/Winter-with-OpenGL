@@ -74,8 +74,6 @@ Drawable* quad;
 // tree
 Drawable* treeModel1; 
 Drawable* bushModel;
-Drawable* deerModel;
-Drawable* bearModel;
 Drawable* appleTreeModel;
 Drawable* pineTreeModel;
 GLuint lightPowerLocation;
@@ -103,11 +101,12 @@ GLuint chrysTexture;
 GLuint bushTexture1;
 GLuint bushTexture2;
 GLuint bushTexture3;
-//deer
+//deer animals
 GLuint deerTexture;
 GLuint bearTexture;
 GLuint polarbearTexture;
 GLuint appleTexture;
+GLuint wolfTexture;
 //snow
 GLuint snowFlakeTexture;
 // locations for miniMapProgram
@@ -126,9 +125,16 @@ BushField* bushes;
 SnowSystem* snowSystem;
 bool snowingEnabled = false;
 float snowAccumulationTime = 0.0f;
+
+
+//animals
+Drawable* deerModel;
+Drawable* bearModel;
+Drawable* wolfModel;
 float deerX; float deerZ; float deerY;
 float bearX; float bearZ; float bearY;
 float polarbearX; float polarbearZ; float polarbearY;
+float wolfX; float wolfZ; float wolfY;
 //float appleX; float appleZ; float appleY;
 
 // Creating a structure to store the material parameters of an object
@@ -431,6 +437,12 @@ void createContext() {
 	//bearTexture = loadSOIL("assets/bear_texture.png");
 	bearTexture = loadSOIL("assets/brown_bear.png");
 	polarbearTexture = loadSOIL("assets/polar_bear.png");
+	
+	// load wolf model
+	wolfModel = new Drawable("assets/wolf.obj");
+	// wolf texture
+	wolfTexture = loadSOIL("assets/wolf.png");
+	
 	// load apple tree model
 	appleTreeModel = new Drawable("assets/apple.obj");
 	// apple tree texture
@@ -945,6 +957,21 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &polarbearM[0][0]);
 	bearModel->bind();
 	bearModel->draw();
+	
+	//11. WOLF
+	resetDefaultStates();
+	glUniform1i(u.useTexture, 7); // Bush & Deer & Bear & Wolf mode
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, wolfTexture);
+	glUniform1i(u.diffuseSampler, 0);
+	wolfX = 30.0f;
+	wolfZ = -15.0f;
+	wolfY = sampleHeightAt(wolfX, wolfZ, heightData, gridRes, minX, maxX, minZ, maxZ);
+	//cout << "Wolf Y position: " << wolfY << endl;
+	mat4 wolfM = translate(mat4(1.0f), vec3(wolfX, wolfY, wolfZ)) * scale(mat4(1.0f), vec3(0.35f));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &wolfM[0][0]);
+	wolfModel->bind();
+	wolfModel->draw();
 	////10. APPLE TREE
 	////LOAD APPLE TREE OBJECT
 	//resetDefaultStates();
@@ -1031,6 +1058,11 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &polarbearM[0][0]);
 	bearModel->bind();
 	bearModel->draw();
+	//wolf
+	mat4 wolfM = translate(mat4(1.0f), vec3(wolfX, wolfY, wolfZ)) * scale(mat4(1.0f), vec3(1.5f));
+	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &wolfM[0][0]);
+	wolfModel->bind();
+	wolfModel->draw();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 void updateWind(	GLFWwindow* window,	WindState& wind,	bool& vKeyPressed,	float biasStep = 0.05f) {
@@ -1110,6 +1142,24 @@ void mainLoop() {
 		mat4 projectionMatrix = camera->projectionMatrix;
 		mat4 viewMatrix = camera->viewMatrix;
 
+		// Check if camera is within 10 units of the wolf 
+		if (abs(camera->position.x - wolfX) < 10.0f &&
+			abs(camera->position.z - wolfZ) < 10.0f) {
+			audio.playPreloaded("wolf_howl", true);
+		}
+		else {
+			audio.stopPreloaded("wolf_howl");
+		}
+		// Check if camera is within 5 units of the bears
+		if ((abs(camera->position.x - bearX) < 5.0f &&	abs(camera->position.z - bearZ) < 5.0f) 
+			||
+			(abs(camera->position.x - polarbearX) < 5.0f &&	abs(camera->position.z - polarbearZ) < 5.0f)
+			){
+			audio.playPreloaded("bear_growl", true);
+		}
+		else {
+			audio.stopPreloaded("bear_growl");
+		}
 		// frustum fit
 		light->fitToCameraFrustum(viewMatrix, projectionMatrix);
 
@@ -1348,6 +1398,8 @@ int main(void) {
 	try {
 		initialize();
 		audio.preload("wind", "sfx/wind.mp3");
+		audio.preload("wolf_howl", "sfx/wolf_howl.mp3");
+		audio.preload("bear_growl", "sfx/bear.mp3");
 		createContext();
 		mainLoop();
 		free();
