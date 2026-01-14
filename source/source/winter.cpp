@@ -1175,14 +1175,15 @@ void sky_visibility_pass() {
 	pineForest->draw();
 	glUniform1i(u.useInstancing, 0);
 
-	// Render bushes (optional - they also block some snow)
-	glUniform1i(u.useInstancing, 1);
-	bushes->draw();
-	glUniform1i(u.useInstancing, 0);
+
+	//// Render bushes (optional - they also block some snow)
+	//glUniform1i(u.useInstancing, 1);
+	//bushes->draw();
+	//glUniform1i(u.useInstancing, 0);
 
 	//block lake 
 	//use lake mask to block snow accumulation on water surface
-	// write lake mask in the buffer as having height?
+	// write lake mask in the buffer as having height? done in shader
 
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1249,7 +1250,7 @@ void mainLoop() {
 	// get screen size
 	int fb_width, fb_height;
 	glfwGetFramebufferSize(window, &fb_width, &fb_height);
-
+	snowAccumulationTime = 0.0f;
 	do {
 		// Static variables persist between frames
 		//static bool vKeyPressed = false;
@@ -1363,9 +1364,9 @@ void mainLoop() {
 					sky_visibility_pass(); // Calculate sky visibility
 				}
 				// Only reset if turning ON after being OFF
-				if (!wasSnowing && snowingEnabled) {
-					snowAccumulationTime = 0.0f; // Fresh start
-				}
+				//if (!wasSnowing && snowingEnabled) {
+				//	snowAccumulationTime = 0.0f; // Fresh start
+				//}
 				cout << "Snow toggled: " << (snowingEnabled ? "ON" : "OFF") << endl;  // Debug
 				gKeyPressed = true;
 			}
