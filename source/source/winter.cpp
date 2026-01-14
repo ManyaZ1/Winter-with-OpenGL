@@ -1,7 +1,7 @@
 ﻿// Include C++ headers
 #include <iostream>
 #include <string>
-
+#define FULL_SCREEN 1
 // Include GLEW
 #include <GL/glew.h>
 
@@ -47,7 +47,7 @@ float sampleHeightAt(
 	float minX, float maxX,
 	float minZ, float maxZ);
 std::vector<float> getHeightDataOnly(const std::string& filePath);
-#define FULL_SCREEN 1
+
 #define W_WIDTH  1800
 #define W_HEIGHT  900
 #define TITLE "Winter"
@@ -66,7 +66,7 @@ Drawable* terrain;
 Drawable* plane;
 GLuint modelDiffuseTexture, modelSpecularTexture;
 GLuint depthFBO, depthTexture;
-GLuint depthFBO2, depthTexture2;
+//GLuint depthFBO2, depthTexture2;
 // Global instance to hold your terrain data after loading
 
 Drawable* quad;
@@ -109,6 +109,7 @@ GLuint appleTexture;
 GLuint wolfTexture;
 //snow
 GLuint snowFlakeTexture;
+GLuint snowTexture;
 // locations for miniMapProgram
 //GLuint quadTextureSamplerLocation;
 
@@ -121,10 +122,6 @@ CloudSystem* cloudSystem;
 Forest* appleForest;
 Forest* pineForest;
 BushField* bushes;
-//snow
-SnowSystem* snowSystem;
-bool snowingEnabled = false;
-float snowAccumulationTime = 0.0f;
 
 
 //animals
@@ -135,7 +132,17 @@ float deerX; float deerZ; float deerY;
 float bearX; float bearZ; float bearY;
 float polarbearX; float polarbearZ; float polarbearY;
 float wolfX; float wolfZ; float wolfY;
-//float appleX; float appleZ; float appleY;
+
+//SNOW globals
+GLuint snowAccumFBO, snowAccumTexture;
+bool snowMapGenerated = false;
+//snow
+SnowSystem* snowSystem;
+bool snowingEnabled = false;
+float snowAccumulationTime = 0.0f;
+float snowLevel = 0.0f;
+
+
 
 // Creating a structure to store the material parameters of an object
 struct Material
@@ -153,6 +160,7 @@ struct WindState {
 	float zBias = 0.0f;
 };
 void updateWind(GLFWwindow* window,WindState& wind,bool& vKeyPressed,float biasStep);
+
 struct TexLocations {
 	// terrain
 	GLuint terrainTex;
@@ -177,6 +185,8 @@ struct TexLocations {
 	// sky & sun
 	GLuint skyTex;
 	GLuint sunTex;
+	
+	GLuint snowTex;
 };
 
 struct Programs {
@@ -231,6 +241,15 @@ struct Uniforms {
 	// samplers
 	GLuint diffuseSampler = 0;
 	GLuint specularSampler = 0;
+
+	//snow
+	GLuint snowAccumMap = 0;
+	GLuint skyVP = 0;
+	GLuint snowAmount = 0;
+
+	// fog
+	GLuint fogDensity = 0;
+	GLuint fogColor = 0;
 };
 
 Programs programs;
@@ -335,6 +354,9 @@ void free() {
 	delete pineForest;
 	delete bushes;
 	delete snowSystem;
+	// Clean up snow resources
+	glDeleteFramebuffers(1, &snowAccumFBO);
+	glDeleteTextures(1, &snowAccumTexture);
 	glfwTerminate();
 }
 
@@ -416,15 +438,26 @@ void createContext() {
 	u.zbiasdepth = glGetUniformLocation(programs.depth, "z_bias");
 	u.xbiassnow = glGetUniformLocation(programs.snow, "x_bias");
 	u.zbiassnow = glGetUniformLocation(programs.snow, "z_bias");
+
+	// Snow accumulation uniforms
+	GLuint snowAccumMapLoc = glGetUniformLocation(programs.lighting, "snowAccumMap");
+	GLuint skyVPLoc = glGetUniformLocation(programs.lighting, "skyVP");
+	GLuint snowAmountLoc = glGetUniformLocation(programs.lighting, "snowAmount");
+	u.snowAccumMap = snowAccumMapLoc;
+	u.skyVP = skyVPLoc;
+	u.snowAmount = snowAmountLoc;
+
+	// Fog uniforms
+	u.fogDensity = glGetUniformLocation(programs.lighting, "fogDensity");
+	u.fogColor = glGetUniformLocation(programs.lighting, "fogColor");
+
+
 	// Loading a model
 	// The terrain object from Gaea is loaded as terrain
 	std::string modelPath = "assets/Mesher_LOD3.obj";
 	terrain = new Drawable(modelPath);
 
-	//// Load suzanne model with textures for shadow demonstration
-	//model1 = new Drawable("suzanne.obj");
-	//modelDiffuseTexture = loadSOIL("suzanne_diffuse.bmp");
-	//modelSpecularTexture = loadSOIL("suzanne_specular.bmp");
+	
 
 	// Load deer model
 	deerModel = new Drawable("assets/deer.obj");
@@ -558,12 +591,17 @@ void createContext() {
 	cloudSystem->addCloud(vec3(-10, 18, -20), 4.5f);
 	cloudSystem->addCloud(vec3(20, 52, -15), 5.5f);
 	cloudSystem->addCloud(vec3(-25, 90, 8), 3.0f);
-	
+
+	/* -======--======- FBO CREATION -======--======- */
+	// Create depth FBO and texture for shadow mapping
 	createDepthFBOAndTexture(depthFBO, depthTexture);
 
-	// Homework 2: create second depth FBO and texture
+	// snow fbo
+	createDepthFBOAndTexture(snowAccumFBO, snowAccumTexture);
 
-	/* load textures */
+
+	/*==================================== load textures =======================================*/
+	snowTexture = loadTextureRepeat("assets/snow.bmp");
 	terrainTexture = loadTextureRepeat("assets/aerial_rocks.bmp");
 	 terrainTexture2 = loadTextureRepeat("assets/grass2.bmp");
 	 
@@ -596,6 +634,8 @@ void createContext() {
 	//cache texture locations
 	glUseProgram(programs.lighting);
 
+	//snow
+	t.snowTex = glGetUniformLocation(programs.lighting, "snowTex");
 	// terrain
 	t.terrainTex = glGetUniformLocation(programs.lighting, "terrainTex");
 	t.terrainTex2 = glGetUniformLocation(programs.lighting, "terrainTex2");
@@ -668,8 +708,21 @@ void resetDefaultStates() {
 	// Explicitly disable instancing attributes just in case
 	for (int i = 4; i <= 8; i++) glDisableVertexAttribArray(i);
 }
+mat4 getSkyViewMatrix() {
+	// Camera looking straight down at terrain center
+	vec3 skyPos = vec3(0.0f, 200.0f, 0.0f); // High above terrain
+	vec3 target = vec3(0.0f, 0.0f, 0.0f);   // Looking at center
+	vec3 up = vec3(0.0f, 0.0f, -1.0f);      // Y-axis as "up" for top-down
+	return lookAt(skyPos, target, up);
+}
 
-void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height) {
+mat4 getSkyProjectionMatrix() {
+	float halfSize = SCALING_FACTOR / 2.0f; // Match  terrain bounds
+	return ortho(-halfSize, halfSize, -halfSize, halfSize, 1.0f, 300.0f);
+}
+void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height, float currentFogDensity) {
+	
+
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, screen_width, screen_height);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -691,28 +744,29 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
 
 	// 1. SKY DOME (Unlit, no shadows)
-	//sphere->bind();
-	resetDefaultStates();
-	glDisable(GL_CULL_FACE);
-	glDepthFunc(GL_LEQUAL);
-	glDepthMask(GL_FALSE);
+	if (currentFogDensity <= 0.3f) {
+		//sphere->bind();
+		resetDefaultStates();
+		glDisable(GL_CULL_FACE);
+		glDepthFunc(GL_LEQUAL);
+		glDepthMask(GL_FALSE);
 
-	glUniform1i(u.useTexture, 3); // Sky mode
-	glUniform1f(u.normDir, -1.0f);
+		glUniform1i(u.useTexture, 3); // Sky mode
+		glUniform1f(u.normDir, -1.0f);
 
-	glActiveTexture(GL_TEXTURE7);
-	glBindTexture(GL_TEXTURE_2D, skyTexture);
-	glUniform1i(t.skyTex, 7);
-	glUniform1i(u.useInstancing, 0); //?
-	mat4 skyM = translate(mat4(1.0f), camera->position) * scale(mat4(1.0f), vec3(30.0f));
-	glUniformMatrix4fv(u.M, 1, GL_FALSE, &skyM[0][0]);
-	sphere->bind();
-	sphere->draw();
+		glActiveTexture(GL_TEXTURE7);
+		glBindTexture(GL_TEXTURE_2D, skyTexture);
+		glUniform1i(t.skyTex, 7);
+		glUniform1i(u.useInstancing, 0); //?
+		mat4 skyM = translate(mat4(1.0f), camera->position) * scale(mat4(1.0f), vec3(30.0f));
+		glUniformMatrix4fv(u.M, 1, GL_FALSE, &skyM[0][0]);
+		sphere->bind();
+		sphere->draw();
 
-	glEnable(GL_CULL_FACE);
-	glDepthFunc(GL_LESS);
-	glDepthMask(GL_TRUE);
-
+		glEnable(GL_CULL_FACE);
+		glDepthFunc(GL_LESS);
+		glDepthMask(GL_TRUE);
+	}
 	// 2. LIGHTING GLOBALS
 	glUniform1i(u.useInstancing, 0);
 	uploadLight(*light);
@@ -724,6 +778,22 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glActiveTexture(GL_TEXTURE8);
 	glBindTexture(GL_TEXTURE_2D, depthTexture);
 	glUniform1i(u.depthMap, 8);
+
+	// === NEW: Bind snow accumulation map ===
+	glActiveTexture(GL_TEXTURE9);
+	glBindTexture(GL_TEXTURE_2D, snowAccumTexture);
+	glUniform1i(u.snowAccumMap, 9);
+	// Calculate and upload sky view-projection matrix (constant)
+	mat4 skyVP = getSkyProjectionMatrix() * getSkyViewMatrix();
+	glUniformMatrix4fv(u.skyVP, 1, GL_FALSE, &skyVP[0][0]);
+
+	// Calculate snow amount based on accumulation time
+	//static float snowLevel = 0.0f;
+	snowLevel = min(snowAccumulationTime / 50.0f, 1.0f);
+	//if (snowingEnabled) {
+	//	snowLevel = min(snowAccumulationTime / 30.0f, 1.0f); // 30 seconds to full coverage
+	//}
+	glUniform1f(u.snowAmount, snowLevel);
 
 	// 3. TERRAIN
 	glUniform1i(u.useInstancing, 0);
@@ -742,6 +812,15 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, waterTexture2);
 	glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, bottomTexture);
 	glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, maskTexture);
+
+	//snoww
+	// === ADD SNOW TEXTURE HERE ===
+	glActiveTexture(GL_TEXTURE10);
+	glBindTexture(GL_TEXTURE_2D, snowTexture);
+	glUniform1i(t.snowTex, 10);  // Bind to slot 10
+	// =============================
+
+
 	glUniform1i(t.terrainTex, 0);
 	glUniform1i(t.terrainTex2, 1);
 	glUniform1i(t.waterTex, 2);
@@ -1065,6 +1144,53 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 	wolfModel->draw();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
+
+
+void sky_visibility_pass() {
+	cout << "Generating snow accumulation map (one-time calculation)..." << endl;
+
+	glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+	glBindFramebuffer(GL_FRAMEBUFFER, snowAccumFBO);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	glUseProgram(programs.depth);
+
+	mat4 skyView = getSkyViewMatrix();
+	mat4 skyProj = getSkyProjectionMatrix();
+	mat4 skyVP = skyProj * skyView;
+
+	glUniformMatrix4fv(shadowViewProjectionLocation, 1, GL_FALSE, &skyVP[0][0]);
+
+	// Render terrain (blocks snow on steep slopes)
+	mat4 terrainM = translate(mat4(), vec3(0.0f, 0.0f, 0.0f)) *
+		scale(mat4(), vec3(SCALING_FACTOR));
+	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &terrainM[0][0]);
+	terrain->bind();
+	terrain->draw();
+
+	// Render trees (they block snow underneath)
+	glUniform1i(u.useInstancing, 1);
+	appleForest->draw();
+	pineForest->draw();
+	glUniform1i(u.useInstancing, 0);
+
+	// Render bushes (optional - they also block some snow)
+	glUniform1i(u.useInstancing, 1);
+	bushes->draw();
+	glUniform1i(u.useInstancing, 0);
+
+	//block lake 
+	//use lake mask to block snow accumulation on water surface
+	// write lake mask in the buffer as having height?
+
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	cout << "Snow accumulation map generated!" << endl;
+	snowMapGenerated = true;
+}
+
 void updateWind(	GLFWwindow* window,	WindState& wind,	bool& vKeyPressed,	float biasStep = 0.05f) {
 	// Toggle wind
 	if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS) {
@@ -1151,9 +1277,9 @@ void mainLoop() {
 			audio.stopPreloaded("wolf_howl");
 		}
 		// Check if camera is within 5 units of the bears
-		if ((abs(camera->position.x - bearX) < 5.0f &&	abs(camera->position.z - bearZ) < 5.0f) 
+		if ((abs(camera->position.x - bearX) < 10.0f &&	abs(camera->position.z - bearZ) < 10.0f) 
 			||
-			(abs(camera->position.x - polarbearX) < 5.0f &&	abs(camera->position.z - polarbearZ) < 5.0f)
+			(abs(camera->position.x - polarbearX) < 10.0f &&	abs(camera->position.z - polarbearZ) < 10.0f)
 			){
 			audio.playPreloaded("bear_growl", true);
 		}
@@ -1173,17 +1299,6 @@ void mainLoop() {
 		//αν σταθερη φωτεινη πηγη δεν εχει νοημα να το κανω καθε frame
 		// κάθε δευτερόλεπτο
 
-		// Rendering the scene from light's perspective when F1 is pressed
-
-		if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS) {
-			//lighting_pass(light_view, light_proj);
-			lighting_pass(light_view, light_proj, fb_width, fb_height);
-		}
-		else {
-			// Render the scene from camera's perspective
-			//lighting_pass(viewMatrix, projectionMatrix);
-			lighting_pass(viewMatrix, projectionMatrix, fb_width, fb_height);
-		}
 
 		// Add cloud on C key press
 		if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
@@ -1227,20 +1342,30 @@ void mainLoop() {
 		// and add fog
 		if (glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS) {
 			if (!gKeyPressed) { // Toggle only on initial press
-				// ADD: CLOUDS COVERING THE SKY?
-				//spawn 200 clouds at random positions
-				for (int i = 0; i < 200; i++) {
-					vec3 pos = vec3(
-						-100.0f + (rand() % 200),  // X: -100 to 100
-						35.0f + (rand() % 60),     // Y: 35 to 95
-						-100.0f + (rand() % 200)   // Z: -100 to 100
-					);
-					float size = 4.0f + (rand() % 5); // Size: 4 to 9
-					cloudSystem->addCloud(pos, size);
-				}
+				
 				// Toggle snowing
 				snowSystem->toggle();
+				bool wasSnowing = snowingEnabled; // Store previous state
 				snowingEnabled = snowSystem->isActive();
+				// === NEW: Generate snow map ONCE when snow is turned ON ===
+				if (snowingEnabled && !snowMapGenerated) {
+					// ADD: CLOUDS COVERING THE SKY?
+					//spawn 200 clouds at random positions
+					for (int i = 0; i < 200; i++) {
+						vec3 pos = vec3(
+							-100.0f + (rand() % 200),  // X: -100 to 100
+							35.0f + (rand() % 60),     // Y: 35 to 95
+							-100.0f + (rand() % 200)   // Z: -100 to 100
+						);
+						float size = 4.0f + (rand() % 5); // Size: 4 to 9
+						cloudSystem->addCloud(pos, size);
+					}
+					sky_visibility_pass(); // Calculate sky visibility
+				}
+				// Only reset if turning ON after being OFF
+				if (!wasSnowing && snowingEnabled) {
+					snowAccumulationTime = 0.0f; // Fresh start
+				}
 				cout << "Snow toggled: " << (snowingEnabled ? "ON" : "OFF") << endl;  // Debug
 				gKeyPressed = true;
 			}
@@ -1256,10 +1381,34 @@ void mainLoop() {
 		else
 			snowSystem->update_velocity(0.0, 0.0);
 
-		// Track accumulation time
-		if (snowingEnabled) {
-			snowAccumulationTime += deltaTime;
-		}
+	// Track accumulation time and update fog
+	if (snowingEnabled) {
+		snowAccumulationTime += deltaTime;	
+	}
+
+	// Update fog based on snowing state
+	float fogDensity = snowingEnabled ? min(snowAccumulationTime / 25.0f, 1.0f) : 0.0f; // Full fog when snowing, no fog otherwise
+
+	vec3 fogColor = vec3(0.8f, 0.85f, 0.9f); // Light grayish-blue fog color
+
+	// Rendering the scene from light's perspective when F1 is pressed
+
+	if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS) {
+		//lighting_pass(light_view, light_proj);
+		lighting_pass(light_view, light_proj, fb_width, fb_height, fogDensity);
+	}
+	else {
+		// Render the scene from camera's perspective
+		//lighting_pass(viewMatrix, projectionMatrix);
+		lighting_pass(viewMatrix, projectionMatrix, fb_width, fb_height, fogDensity);
+	}
+
+
+
+	// Upload fog uniforms to shader
+	glUseProgram(programs.lighting);
+	glUniform1f(u.fogDensity, fogDensity);
+	glUniform3f(u.fogColor, fogColor.r, fogColor.g, fogColor.b);
 
 		// In lighting_pass(), after rendering everything else:
 		snowSystem->render(viewMatrix, projectionMatrix);
@@ -1415,13 +1564,8 @@ int main(void) {
 }
 
 //height helpers
-float sampleHeightAt(
-	float x, float z,
-	const std::vector<float>& heightData,
-	int gridResolution,
-	float minX, float maxX,
-	float minZ, float maxZ)
-{
+float sampleHeightAt(float x,float z,const std::vector<float>& heightData,int gridResolution,
+	float minX, float maxX,float minZ, float maxZ){
 	if (heightData.empty() || gridResolution <= 0)
 		return 0.0f; // fallback to ground level
 

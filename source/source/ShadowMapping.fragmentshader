@@ -45,16 +45,22 @@ uniform sampler2D bushTex3;  // Slot 2 (Bush PNG)
 // ===========================================================
 uniform sampler2D diffuseColorSampler; // Slot 2 (Bush PNG)
 // ====================================================== fog
-uniform float fogDensity;// =0.5; // 0.0 to 1.0
-uniform vec3 fogColor;//= vec3(0.8, 0.85, 0.9);;
-
+uniform float fogDensity;//=1.0; // 0.0 to 1.0
+uniform vec3 fogColor;// = vec3(0.8, 0.85, 0.9);;
+uniform sampler2D snowTex;
 //uniform sampler2D barkSampler;    //  (Slot 0)
 //uniform sampler2D needleSampler;  //  (Slot 1)
-
+// Add with other uniforms (around line 30)
+uniform sampler2D snowAccumMap;
+uniform mat4 skyVP;
+uniform float snowAmount; // 0.0 to 1.0
 // =================================================
 flat in int textureIndex;
 // =================================================
 
+// Add with other `in` variables
+in vec3 vertex_position_worldspace;
+in vec3 Normal_worldspace;
 
 // light properties
 struct Light {
@@ -269,6 +275,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         _Ks.rgb = vec3(0.1); 
         _Ns = 5.0;
     }
+    float lakeMask ;
     if (useTexture == 1) {
         vec3 terrainColor = mix(
         texture(terrainTex, vertex_UV_tiled).rgb,
@@ -281,7 +288,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             texture(waterTex2, waterUV2).rgb,
             0.3    );
         vec3 bottomColor = mix(texture(waterTex2, vertex_UV).rgb, texture(bottomTex, vertex_UV).rgb, 0.3);
-        float lakeMask = smoothstep(0.0, 1.0, texture(maskTex, vertex_UV).r);
+        lakeMask = smoothstep(0.0, 1.0, texture(maskTex, vertex_UV).r);
         vec3 finalWater = mix(bottomColor, waterColor, 0.6);
     
         //lake mask
@@ -333,6 +340,47 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         // (usually not needed for animal skins, but good for safety)
         if (texColor.a < 0.1) discard; 
     }
+
+     if (snowAmount > 0.01 && lakeMask<0.5) {
+        // Transform fragment position to sky-space
+        vec4 fragPosSky = skyVP * vec4(vertex_position_worldspace, 1.0);
+        vec3 skyCoords = (fragPosSky.xyz / fragPosSky.w) * 0.5 + 0.5;
+        
+        // Check if this fragment is visible from the sky
+        // (comparing depth values like shadow mapping)
+        float skyDepth = texture(snowAccumMap, skyCoords.xy).r;
+        float fragDepth = skyCoords.z;
+        float skyVisible = (fragDepth - 0.001) < skyDepth ? 1.0 : 0.0; // Small bias
+        
+        // Only accumulate on upward-facing surfaces
+        //vec3 worldNormal = normalize(vertex_normal_cameraspace.xyz);
+        //float normalFactor = max(dot(worldNormal, vec3(0, 1, 0)), 0.0); 
+        //1.0 (Same Direction), 0.0 (Perpendicular)        //1.0 (Opposite Direction) upside down
+        //normalFactor = pow(normalFactor, 2.0); // Sharper falloff on slopes
+        vec3 n = normalize(Normal_worldspace);
+        float normalFactor = max(dot(n, vec3(0, 1, 0)), 0.0);
+        // Snow starts at cos=0.3 slopes and is full at 0-degree slopes
+        float lowThreshold = 0.3;  // Snow starts appearing
+        float highThreshold = 0.8; // Snow is fully opaque
+        normalFactor = smoothstep(lowThreshold, highThreshold, normalFactor);
+        // Calculate final snow coverage
+        float snowCoverage = skyVisible * normalFactor * snowAmount;
+        
+        // Blend base color with snow
+        //vec3 snowColor = vec3(0.95, 0.96, 0.98); // Slightly blue-white
+
+        vec3 snowTextureColor = texture(snowTex, vertex_UV_tiled * 2.0).rgb;
+        vec3 snowColor=snowTextureColor.rgb;
+        _Kd.rgb = mix(_Kd.rgb, snowColor, snowCoverage);
+        _Ka.rgb = mix(_Ka.rgb, snowColor * 0.6, snowCoverage);
+        _Ks.rgb = mix(_Ks.rgb, vec3(0.8), snowCoverage); // Snow is reflective
+        _Ns = mix(_Ns, 25.0, snowCoverage); // Increase shininess
+
+
+
+    }
+
+
     // Phong Reflection Model
     // 1. Ambient
     vec4 Ia = lightData.La * _Ka;

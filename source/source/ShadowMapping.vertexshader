@@ -53,7 +53,8 @@ uniform float normDir;
 uniform vec2 uvScale; 
 out vec2 vertex_UV_tiled;
 out vec3 fragPos_modelspace;
-
+out vec3 vertex_position_worldspace;
+out vec3 Normal_worldspace;
 // ===== ADD THIS NEW OUTPUT FOR FRAGMENT SHADER =====
 flat out int textureIndex;
 // ===================================================
@@ -148,6 +149,10 @@ void main() {
     vertex_position_lightspace = lightVP * modelMatrix * vec4(vertexPosition_modelspace, 1);
     //}
     vertex_UV_tiled = vertexUV * uvScale;
+
+    vec4 worldPos = M * vec4(vertexPosition_modelspace, 1.0);
+    vertex_position_worldspace = worldPos.xyz; // Pass to fragment shader
+    Normal_worldspace = normalize(mat3(M) * vertexNormal_modelspace);
 }
 
 
