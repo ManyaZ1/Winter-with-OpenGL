@@ -140,6 +140,7 @@ bool snowMapGenerated = false;
 SnowSystem* snowSystem;
 bool snowingEnabled = false;
 float snowAccumulationTime = 0.0f;
+float fogAccumulationTime = 0.0f;
 float snowLevel = 0.0f;
 
 
@@ -744,7 +745,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
 
 	// 1. SKY DOME (Unlit, no shadows)
-	if (currentFogDensity <= 0.3f) {
+	if (currentFogDensity <= 0.5f) { //draw only if low fog
 		//sphere->bind();
 		resetDefaultStates();
 		glDisable(GL_CULL_FACE);
@@ -1364,9 +1365,10 @@ void mainLoop() {
 					sky_visibility_pass(); // Calculate sky visibility
 				}
 				// Only reset if turning ON after being OFF
-				//if (!wasSnowing && snowingEnabled) {
-				//	snowAccumulationTime = 0.0f; // Fresh start
-				//}
+				if (!wasSnowing && snowingEnabled) {
+					fogAccumulationTime = 0.0f; // Fresh start
+				}
+				
 				cout << "Snow toggled: " << (snowingEnabled ? "ON" : "OFF") << endl;  // Debug
 				gKeyPressed = true;
 			}
@@ -1385,11 +1387,12 @@ void mainLoop() {
 	// Track accumulation time and update fog
 	if (snowingEnabled) {
 		snowAccumulationTime += deltaTime;	
+		fogAccumulationTime += deltaTime;
 	}
 
 	// Update fog based on snowing state
-	float fogDensity = snowingEnabled ? min(snowAccumulationTime / 25.0f, 1.0f) : 0.0f; // Full fog when snowing, no fog otherwise
-
+	float fogDensity = snowingEnabled ? min(fogAccumulationTime / 25.0f, 1.0f) : 0.0f; // Full fog when snowing, no fog otherwise
+	//
 	vec3 fogColor = vec3(0.8f, 0.85f, 0.9f); // Light grayish-blue fog color
 
 	// Rendering the scene from light's perspective when F1 is pressed
