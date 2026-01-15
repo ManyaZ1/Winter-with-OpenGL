@@ -133,16 +133,19 @@ float bearX; float bearZ; float bearY;
 float polarbearX; float polarbearZ; float polarbearY;
 float wolfX; float wolfZ; float wolfY;
 
+// ============================================================================================ //
+							      //       WEATHER GLOBALS       //							                                          
+// =========================================================================================== //
 //SNOW globals
 GLuint snowAccumFBO, snowAccumTexture;
 bool snowMapGenerated = false;
-//snow
+//snow and fog
 SnowSystem* snowSystem;
 bool snowingEnabled = false;
 float snowAccumulationTime = 0.0f;
 float fogAccumulationTime = 0.0f;
 float snowLevel = 0.0f;
-
+float fogDensity = 0.0f;
 
 
 // Creating a structure to store the material parameters of an object
@@ -1252,6 +1255,8 @@ void mainLoop() {
 	int fb_width, fb_height;
 	glfwGetFramebufferSize(window, &fb_width, &fb_height);
 	snowAccumulationTime = 0.0f;
+	float fogStopedTime = 0.0f;
+	//float fogDensity = 0.0f;
 	do {
 		// Static variables persist between frames
 		//static bool vKeyPressed = false;
@@ -1368,7 +1373,9 @@ void mainLoop() {
 				if (!wasSnowing && snowingEnabled) {
 					fogAccumulationTime = 0.0f; // Fresh start
 				}
-				
+				if(wasSnowing && !snowingEnabled) {
+					fogStopedTime = glfwGetTime();
+				}
 				cout << "Snow toggled: " << (snowingEnabled ? "ON" : "OFF") << endl;  // Debug
 				gKeyPressed = true;
 			}
@@ -1391,7 +1398,7 @@ void mainLoop() {
 	}
 
 	// Update fog based on snowing state
-	float fogDensity = snowingEnabled ? min(fogAccumulationTime / 25.0f, 1.0f) : 0.0f; // Full fog when snowing, no fog otherwise
+	fogDensity = snowingEnabled ? min(fogAccumulationTime / 25.0f, 1.0f) : max(fogDensity -(currentTime-fogStopedTime)/25.0f,0.0f); // Full fog when snowing, no fog otherwise
 	//
 	vec3 fogColor = vec3(0.8f, 0.85f, 0.9f); // Light grayish-blue fog color
 
