@@ -125,3 +125,8 @@ CloudSystem::~CloudSystem() {
     // Delete the array of 2 textures
     glDeleteTextures(2, cloudTextures);
 }
+// drive clouds away 
+// clpouds spped up and alpha decreases WHEN they reach the x=100 boundary or z =100 boundary they disappear
+void CloudSystem::clearClouds() {
+    CloudSystem::clouds.clear();
+}

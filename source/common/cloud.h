@@ -38,8 +38,9 @@ public:
     void addCloud(vec3 position, float size = 5.0f);
     void update(float deltaTime);
     void render(mat4 viewMatrix, mat4 projectionMatrix);
-
+    void clearClouds();
     int getCloudCount() const { return clouds.size(); }
+    
 };
 
 #endif

@@ -1292,9 +1292,9 @@ void mainLoop() {
 			audio.stopPreloaded("wolf_howl");
 		}
 		// Check if camera is within 5 units of the bears
-		if ((abs(camera->position.x - bearX) < 8.0f &&	abs(camera->position.z - bearZ) < 8.0f) 
+		if ((abs(camera->position.x - bearX) < 7.0f &&	abs(camera->position.z - bearZ) < 7.0f) 
 			||
-			(abs(camera->position.x - polarbearX) < 8.0f &&	abs(camera->position.z - polarbearZ) < 8.0f)
+			(abs(camera->position.x - polarbearX) < 7.0f &&	abs(camera->position.z - polarbearZ) < 7.0f)
 			){
 			audio.playPreloaded("bear_growl", true);
 		}
@@ -1381,9 +1381,10 @@ void mainLoop() {
 				//if (!wasSnowing && snowingEnabled) {
 				//	fogAccumulationTime = 0.0f; // Fresh start
 				//}
-				//if(wasSnowing && !snowingEnabled) {
-				//	fogStopedTime = 0.0f;//glfwGetTime();
-				//}
+				if(wasSnowing && !snowingEnabled) {
+					//clear clouds
+					cloudSystem->clearClouds();
+				}
 				cout << "Snow toggled: " << (snowingEnabled ? "ON" : "OFF") << endl;  // Debug
 				gKeyPressed = true;
 			}
