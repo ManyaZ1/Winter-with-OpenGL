@@ -54,6 +54,10 @@ uniform sampler2D snowTex;
 uniform sampler2D snowAccumMap;
 uniform mat4 skyVP;
 uniform float snowAmount; // 0.0 to 1.0
+
+//snow detail
+uniform sampler2D snowDetailTex;
+
 // =================================================
 flat in int textureIndex;
 // =================================================
@@ -89,12 +93,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility);
 
 
 void main() {   
-    // SUN (emissive sphere)
-    if (useTexture == 2) {
-        vec4 sunColor = texture(sunTex, vertex_UV);
-        fragmentColor = vec4(sunColor.rgb, 1.0);
-        return;
-    }
+    
     // If using the sky texture, output it directly and skip the rest
     if (useTexture == 3) {
         // spherical mapping in fragment shader
@@ -107,17 +106,19 @@ void main() {
         float v = asin(clamp(p.y, -1.0, 1.0)) / pi + 0.5;
 
         // fold into [0,1), safe for repeat-wrapped texture
-        u = fract(u);
-        v = clamp(v, 0.0, 1.0);
+        u = 1-fract(u);
+        v = 1-clamp(v, 0.0, 1.0);
 
         fragmentColor = vec4(texture(skyTex, vec2(u, v)).rgb, 1.0);
+        
+        fragmentColor.rgb = mix(fragmentColor.rgb, fogColor,  fogDensity );
         return;
     }
 
     //fog will be applied
     
     // Mode 4 for simple textured billboards (clouds)
-    if (useTexture == 4) {
+    else if (useTexture == 4) {
         //vec4 texColor = texture(sunTex, vertex_UV);
         vec2 rotatedUV = vertex_UV;
         float cosA = cos(uvRotationAngle);
@@ -143,6 +144,13 @@ void main() {
         
         fragmentColor = texColor; // Use RGB and Alpha directly
         //return;
+    }
+
+    // SUN (emissive sphere)
+    else if (useTexture == 2) {
+        vec4 sunColor = texture(sunTex, vertex_UV);
+        fragmentColor = vec4(sunColor.rgb, 1.0);
+    //return;
     }
     else {
     // --- LIGHT 1  ---
@@ -242,7 +250,17 @@ float ShadowCalculation(vec4 fragPositionLightspace,sampler2D depthMap ) {
 
     return shadow;
 }
-
+//float hash(vec3 p)
+//{
+//    p = fract(p * 0.3183099 + vec3(0.1));
+//    p *= 17.0;
+//    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+//}
+    float hash(vec3 p) {
+    p = fract(p * 0.1031);
+    p += dot(p, p.yzx + 33.33);
+    return fract((p.x + p.y) * p.z);
+}
 vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     vec4 _Ks = mtl.Ks;
     vec4 _Kd = mtl.Kd;
@@ -297,18 +315,6 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         _Ks.rgb = _Kd.rgb; // or keep as is
         _Ns = 10.0;
     }
-//    if (useTexture == 6) {
-//        vec4 texColor = texture(diffuseColorSampler, vertex_UV);
-//
-//    // Alpha test for PNG leaves
-//        if (texColor.a < 0.1)
-//            discard;
-//
-//        _Kd.rgb = texColor.rgb;
-//        _Ka.rgb = 0.45 * _Kd.rgb; // boost beacuse bush is just 3 planes
-//        _Ks.rgb = vec3(0.05);
-//        _Ns = 4.0;
-//    }
     if (useTexture == 6) {// bush
         vec4 texColor;
         if (textureIndex == 0) { 
@@ -340,22 +346,70 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         // (usually not needed for animal skins, but good for safety)
         if (texColor.a < 0.1) discard; 
     }
+    float distToCamera = length(vertex_position_cameraspace.xyz);
+    
+    float detailFade = smoothstep(50.0, 10.0, distToCamera);
 
-     if (snowAmount > 0.01 && lakeMask<0.5) {
+    // snowflakes
+    //if (snowAmount > 0.01 && lakeMask < 0.5) {
+    //    vec3 flakeGrid = floor(vertex_position_worldspace * 20.0);
+    //    float birthThreshold = hash(flakeGrid);
+    //    if (birthThreshold < snowAmount) {
+    //        vec3 snowflakeColor = vec3(0.98, 0.98, 1.0);
+    //        float strength = detailFade; 
+    //        _Kd.rgb = mix(_Kd.rgb, snowflakeColor, strength);
+    //    }
+    //}
+    if (detailFade > 0.01 && snowAmount > 0.01 && snowAmount < 0.6 && lakeMask < 0.5 ) {
+        float gridScale = 10.0; 
+        vec3 n = normalize(Normal_worldspace);
+        float upFactor = max(dot(n, vec3(0, 1, 0)), 0.0);
+        //vec3 scaledWorld = vertex_position_worldspace * gridScale;
+        float adaptiveScale = mix(10.0, 5.0, upFactor); 
+vec3 scaledWorld = vertex_position_worldspace * adaptiveScale;
+        vec3 cellID = floor(scaledWorld);    
+        float birthThreshold = hash(cellID) + 0.1;//delay
+        if (birthThreshold < snowAmount) {
+        // 3. SKY VISIBILITY (The expensive part)
+            vec4 fragPosSky = skyVP * vec4(vertex_position_worldspace, 1.0);
+            vec3 skyCoords = (fragPosSky.xyz / fragPosSky.w) * 0.5 + 0.5;
+            float skyDepth = texture(snowAccumMap, skyCoords.xy).r;
+            float skyVisible = (skyCoords.z - 0.001) < skyDepth ? 1.0 : 0.0;
+        // 4. FIX FOR TREES: If it's a tree, it might not be in the depth map.
+        // We can allow flakes if the surface faces UP, even if skyVisible fails.
+            
+            
+        // Appear if visible from sky OR if the surface is facing up (like branches)
+            if (skyVisible > 0.5 || upFactor > 0.8) { 
+                vec3 cellUV = fract(scaledWorld) - 0.5; 
+                float dist = length(cellUV);            
+            // Define shape
+                //float flakeSize = 0.3 + (hash(cellID + 1.0) * 0.15); 
+                float angle = atan(cellUV.y, cellUV.x);
+float starMod = cos(angle * 6.0); 
+float snowflakeDist = dist / (1.0 + 0.4 * starMod);
+float flakeSize = 0.2 + (hash(cellID + 1.0) * 0.1); 
+float shape = smoothstep(flakeSize, flakeSize - 0.05, snowflakeDist);
+                //float shape = smoothstep(flakeSize, flakeSize - 0.05, dist);
+            // Final blend
+                vec3 flakeColor = vec3(0.85,0.9,1.0);
+                float finalAlpha = shape * detailFade; // detailFade kills distant flakes
+                _Kd.rgb = mix(_Kd.rgb, flakeColor, finalAlpha);
+            }
+        }
+     }
+     if (snowAmount > 0.2 && lakeMask<0.5) {  //SNOWLEVEL=SNOWAMOUT=0.1 => menas 5 accumulation time 
         // Transform fragment position to sky-space
         vec4 fragPosSky = skyVP * vec4(vertex_position_worldspace, 1.0);
         vec3 skyCoords = (fragPosSky.xyz / fragPosSky.w) * 0.5 + 0.5;
         
-        // Check if this fragment is visible from the sky
-        // (comparing depth values like shadow mapping)
+        // Check if this fragment is visible from the sky // (comparing depth values like shadow mapping)
         float skyDepth = texture(snowAccumMap, skyCoords.xy).r;
         float fragDepth = skyCoords.z;
         float skyVisible = (fragDepth - 0.001) < skyDepth ? 1.0 : 0.0; // Small bias
         
-        // Only accumulate on upward-facing surfaces
-        //vec3 worldNormal = normalize(vertex_normal_cameraspace.xyz);
-        //float normalFactor = max(dot(worldNormal, vec3(0, 1, 0)), 0.0); 
-        //1.0 (Same Direction), 0.0 (Perpendicular)        //1.0 (Opposite Direction) upside down
+        // Only accumulate on upward-facing surfaces                    //vec3 worldNormal = normalize(vertex_normal_cameraspace.xyz); //float normalFactor = max(dot(worldNormal, vec3(0, 1, 0)), 0.0); 
+        //1.0 (Same Direction), 0.0 (Perpendicular) //-1.0 (Opposite Direction) upside down
         //normalFactor = pow(normalFactor, 2.0); // Sharper falloff on slopes
         vec3 n = normalize(Normal_worldspace);
         float normalFactor = max(dot(n, vec3(0, 1, 0)), 0.0);
@@ -365,7 +419,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         normalFactor = smoothstep(lowThreshold, highThreshold, normalFactor);
         // Calculate final snow coverage
         float snowCoverage = skyVisible * normalFactor * snowAmount;
-        
+
         // Blend base color with snow
         //vec3 snowColor = vec3(0.95, 0.96, 0.98); // Slightly blue-white
 
@@ -373,11 +427,8 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         vec3 snowColor=snowTextureColor.rgb;
         _Kd.rgb = mix(_Kd.rgb, snowColor, snowCoverage);
         _Ka.rgb = mix(_Ka.rgb, snowColor * 0.6, snowCoverage);
-        _Ks.rgb = mix(_Ks.rgb, vec3(0.8), snowCoverage); // Snow is reflective
-        _Ns = mix(_Ns, 25.0, snowCoverage); // Increase shininess
-
-
-
+        _Ks.rgb = mix(_Ks.rgb, vec3(0.6), snowCoverage); // Snow is reflective
+        _Ns = mix(_Ns, 10.0, snowCoverage); // Increase shininess
     }
 
 

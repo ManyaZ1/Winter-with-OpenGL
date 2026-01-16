@@ -167,7 +167,7 @@ using namespace glm;
 SnowSystem::SnowSystem(int max) : maxParticles(max), isSnowing(false) {
     particles.resize(maxParticles);
     
-    spawnHeight = 40.0f; // Height where snow spawns (lowered from 100)
+    spawnHeight = 30.0f; // Height where snow spawns (lowered from 100)
 }
 
 SnowSystem::~SnowSystem() {

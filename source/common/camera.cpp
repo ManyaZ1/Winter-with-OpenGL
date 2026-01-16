@@ -3,7 +3,7 @@
 #include "camera.h"
 #include <vector>
 
-#define SCALING_FACTOR 100 //lab.cpp kai camera.cpp
+#define SCALING_FACTOR 200 //lab.cpp kai camera.cpp
 using namespace glm;
 
 Camera::Camera(GLFWwindow* window) : window(window) {

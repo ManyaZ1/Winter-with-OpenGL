@@ -5,7 +5,7 @@ out vec4 FragColor;
 
 void main() {
     // Calculate distance from center of point sprite
-    vec2 coord = gl_PointCoord - vec2(0.5);
+    vec2 coord = gl_PointCoord - vec2(0.5); //Built-in variable providing UV coordinates (0-1) for each point
     float dist = length(coord);
     
     // Create circular shape - discard pixels outside circle

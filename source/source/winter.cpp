@@ -1,7 +1,6 @@
 ﻿// Include C++ headers
 #include <iostream>
 #include <string>
-#define FULL_SCREEN 1
 // Include GLEW
 #include <GL/glew.h>
 
@@ -27,7 +26,10 @@
 
 #define AM_IMPLEMENTATION  // This "activates" the audio code here
 #include "../common/AudioManager.h"
-
+#define FULL_SCREEN 0
+#define W_WIDTH  1000
+#define W_HEIGHT  700
+#define TITLE "Winter"
 AudioManager audio;
 
 #define SCALING_FACTOR 200//60 //lab.cpp kai camera.cpp
@@ -48,9 +50,7 @@ float sampleHeightAt(
 	float minZ, float maxZ);
 std::vector<float> getHeightDataOnly(const std::string& filePath);
 
-#define W_WIDTH  1800
-#define W_HEIGHT  900
-#define TITLE "Winter"
+
 
 #define SHADOW_WIDTH  8192// 4096//2048    8192
 #define SHADOW_HEIGHT  8192//4096//2048  8192
@@ -110,6 +110,7 @@ GLuint wolfTexture;
 //snow
 GLuint snowFlakeTexture;
 GLuint snowTexture;
+GLuint snowDetailTexture;
 // locations for miniMapProgram
 //GLuint quadTextureSamplerLocation;
 
@@ -191,6 +192,7 @@ struct TexLocations {
 	GLuint sunTex;
 	
 	GLuint snowTex;
+	GLuint  snowDetailTex;
 };
 
 struct Programs {
@@ -510,7 +512,7 @@ void createContext() {
 
 	chrysTexture = loadTextureRepeat("assets/chrys.jpg"); //best?
 
-	trunkTexture = loadTextureRepeat("assets/bark.jpg");
+	trunkTexture = loadTextureRepeat("assets/bark.png");
 
 	needleTexture = loadTextureRepeat("assets/tree2.jpg");
 
@@ -605,7 +607,8 @@ void createContext() {
 
 
 	/*==================================== load textures =======================================*/
-	snowTexture = loadTextureRepeat("assets/snow.bmp");
+	snowTexture = loadTextureRepeat("assets/snow.bmp"); 
+	snowDetailTexture = loadTextureRepeat("assets/worley_snow.png");
 	terrainTexture = loadTextureRepeat("assets/aerial_rocks.bmp");
 	 terrainTexture2 = loadTextureRepeat("assets/grass2.bmp");
 	 
@@ -640,6 +643,7 @@ void createContext() {
 
 	//snow
 	t.snowTex = glGetUniformLocation(programs.lighting, "snowTex");
+	t.snowDetailTex = glGetUniformLocation(programs.lighting, "snowDetailTex");
 	// terrain
 	t.terrainTex = glGetUniformLocation(programs.lighting, "terrainTex");
 	t.terrainTex2 = glGetUniformLocation(programs.lighting, "terrainTex2");
@@ -683,7 +687,7 @@ void createContext() {
 	//snow
 	snowSystem = new SnowSystem();
 	
-	snowFlakeTexture = loadSOIL("assets/circle.png");
+	//snowFlakeTexture = loadSOIL("assets/circle.png"); //no longer used, left for future testing (snowflake shape)
 	snowSystem = new SnowSystem(10000);
 	snowSystem->initialize(programs.snow, snowFlakeTexture);
 	//everything orange fix
@@ -748,7 +752,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
 
 	// 1. SKY DOME (Unlit, no shadows)
-	if (currentFogDensity <= 0.5f) { //draw only if low fog
+	//if (currentFogDensity <= 0.5f) { //draw only if low fog
 		//sphere->bind();
 		resetDefaultStates();
 		glDisable(GL_CULL_FACE);
@@ -770,7 +774,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 		glEnable(GL_CULL_FACE);
 		glDepthFunc(GL_LESS);
 		glDepthMask(GL_TRUE);
-	}
+	//}
 	// 2. LIGHTING GLOBALS
 	glUniform1i(u.useInstancing, 0);
 	uploadLight(*light);
@@ -793,7 +797,7 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 
 	// Calculate snow amount based on accumulation time
 	//static float snowLevel = 0.0f;
-	snowLevel = min(snowAccumulationTime / 50.0f, 1.0f);
+	snowLevel = max(min(snowAccumulationTime / 50.0f, 1.0f),0);  // 5/50=0.1
 	//if (snowingEnabled) {
 	//	snowLevel = min(snowAccumulationTime / 30.0f, 1.0f); // 30 seconds to full coverage
 	//}
@@ -823,7 +827,11 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	glBindTexture(GL_TEXTURE_2D, snowTexture);
 	glUniform1i(t.snowTex, 10);  // Bind to slot 10
 	// =============================
-
+	// === ADD SNOW DETAIL TEXTURE ===
+	glActiveTexture(GL_TEXTURE11);
+	glBindTexture(GL_TEXTURE_2D, snowDetailTexture);
+	glUniform1i(t.snowDetailTex, 11);  // Bind to slot 11
+	// ===============================
 
 	glUniform1i(t.terrainTex, 0);
 	glUniform1i(t.terrainTex2, 1);
@@ -1254,7 +1262,7 @@ void mainLoop() {
 	// get screen size
 	int fb_width, fb_height;
 	glfwGetFramebufferSize(window, &fb_width, &fb_height);
-	snowAccumulationTime = 0.0f;
+	snowAccumulationTime = 0.0f;//-5.0f;
 	float fogStopedTime = 0.0f;
 	//float fogDensity = 0.0f;
 	do {
@@ -1276,17 +1284,17 @@ void mainLoop() {
 		mat4 viewMatrix = camera->viewMatrix;
 
 		// Check if camera is within 10 units of the wolf 
-		if (abs(camera->position.x - wolfX) < 10.0f &&
-			abs(camera->position.z - wolfZ) < 10.0f) {
+		if (abs(camera->position.x - wolfX) < 8.0f &&
+			abs(camera->position.z - wolfZ) < 8.0f) {
 			audio.playPreloaded("wolf_howl", true);
 		}
 		else {
 			audio.stopPreloaded("wolf_howl");
 		}
 		// Check if camera is within 5 units of the bears
-		if ((abs(camera->position.x - bearX) < 10.0f &&	abs(camera->position.z - bearZ) < 10.0f) 
+		if ((abs(camera->position.x - bearX) < 8.0f &&	abs(camera->position.z - bearZ) < 8.0f) 
 			||
-			(abs(camera->position.x - polarbearX) < 10.0f &&	abs(camera->position.z - polarbearZ) < 10.0f)
+			(abs(camera->position.x - polarbearX) < 8.0f &&	abs(camera->position.z - polarbearZ) < 8.0f)
 			){
 			audio.playPreloaded("bear_growl", true);
 		}
@@ -1303,7 +1311,7 @@ void mainLoop() {
 		// Now render shadow map
 		depth_pass(light_view, light_proj, depthFBO);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		//αν σταθερη φωτεινη πηγη δεν εχει νοημα να το κανω καθε frame
+		//αν σταθερη φωτεινή πηγη δεν εχει νοημα να το κανω καθε frame
 		// κάθε δευτερόλεπτο
 
 
@@ -1360,9 +1368,9 @@ void mainLoop() {
 					//spawn 200 clouds at random positions
 					for (int i = 0; i < 200; i++) {
 						vec3 pos = vec3(
-							-100.0f + (rand() % 200),  // X: -100 to 100
+							-80.0f + (rand() % 160),  // X: -80 to 80
 							35.0f + (rand() % 60),     // Y: 35 to 95
-							-100.0f + (rand() % 200)   // Z: -100 to 100
+							-80.0f + (rand() % 160)   // Z: -80 to 80
 						);
 						float size = 4.0f + (rand() % 5); // Size: 4 to 9
 						cloudSystem->addCloud(pos, size);
@@ -1370,12 +1378,12 @@ void mainLoop() {
 					sky_visibility_pass(); // Calculate sky visibility
 				}
 				// Only reset if turning ON after being OFF
-				if (!wasSnowing && snowingEnabled) {
-					fogAccumulationTime = 0.0f; // Fresh start
-				}
-				if(wasSnowing && !snowingEnabled) {
-					fogStopedTime = glfwGetTime();
-				}
+				//if (!wasSnowing && snowingEnabled) {
+				//	fogAccumulationTime = 0.0f; // Fresh start
+				//}
+				//if(wasSnowing && !snowingEnabled) {
+				//	fogStopedTime = 0.0f;//glfwGetTime();
+				//}
 				cout << "Snow toggled: " << (snowingEnabled ? "ON" : "OFF") << endl;  // Debug
 				gKeyPressed = true;
 			}
@@ -1395,10 +1403,15 @@ void mainLoop() {
 	if (snowingEnabled) {
 		snowAccumulationTime += deltaTime;	
 		fogAccumulationTime += deltaTime;
+		
 	}
-
+	if (!snowingEnabled) {
+		fogAccumulationTime -= deltaTime;
+	}
+	fogAccumulationTime = glm::clamp(fogAccumulationTime, 0.0f, 40.0f);
+	fogDensity = fogAccumulationTime / 40.0f;
 	// Update fog based on snowing state
-	fogDensity = snowingEnabled ? min(fogAccumulationTime / 25.0f, 1.0f) : max(fogDensity -(currentTime-fogStopedTime)/25.0f,0.0f); // Full fog when snowing, no fog otherwise
+	//fogDensity = snowingEnabled ? min(fogAccumulationTime / 40.0f, 1.0f) : max(fogDensity -(fogStopedTime)/40.0f,0.0f); // Full fog when snowing, no fog otherwise
 	//
 	vec3 fogColor = vec3(0.8f, 0.85f, 0.9f); // Light grayish-blue fog color
 
@@ -1475,7 +1488,7 @@ void initialize() {
 	//// The last two NULL arguments are for the monitor and share context respectively.
 	//window = glfwCreateWindow(mode->width, mode->height, TITLE, primary_monitor, NULL);
 	// Open a window and create its OpenGL context
-#if FULL_SCREEN == 0
+#if FULL_SCREEN == 1
 	// Fullscreen mode
 	GLFWmonitor* primary_monitor = glfwGetPrimaryMonitor();
 	const GLFWvidmode* mode = glfwGetVideoMode(primary_monitor);
