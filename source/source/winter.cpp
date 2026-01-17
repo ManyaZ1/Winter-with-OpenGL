@@ -52,8 +52,8 @@ std::vector<float> getHeightDataOnly(const std::string& filePath);
 
 
 
-#define SHADOW_WIDTH  8192// 4096//2048    8192
-#define SHADOW_HEIGHT  8192//4096//2048  8192
+#define SHADOW_WIDTH  16384 //8192// 4096//2048    8192
+#define SHADOW_HEIGHT  16384//8192//4096//2048  8192
 
 // Global Variables
 GLFWwindow* window;
@@ -1262,7 +1262,7 @@ void mainLoop() {
 	// get screen size
 	int fb_width, fb_height;
 	glfwGetFramebufferSize(window, &fb_width, &fb_height);
-	snowAccumulationTime = 0.0f;//-5.0f;
+	snowAccumulationTime = -5.0f; //initially no snow lands, so start negative to delay
 	float fogStopedTime = 0.0f;
 	//float fogDensity = 0.0f;
 	do {
