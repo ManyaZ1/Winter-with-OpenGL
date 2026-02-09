@@ -4,7 +4,7 @@ import json
 import os
 import struct
 # ================= CONFIG =================
-OBJ_PATH       = "C:/Users/USER/Documents/GitHub/Winter-with-OpenGL/source/source/assets/Mesher.obj"
+OBJ_PATH       = "C:/Users/USER/Documents/GitHub/Winter-with-OpenGL/source/source/assets/Mesher_flat_lake.obj"#Mesher.obj"
 LAKE_MASK_PATH = "C:/Users/USER/Documents/GitHub/Winter-with-OpenGL/source/source/assets/Lake_Mask.bmp"
 
 OUT_DIR = "C:/Users/USER/Documents/GitHub/Winter-with-OpenGL/source/source/assets/heightmap/"

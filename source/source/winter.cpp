@@ -265,6 +265,8 @@ struct Uniforms {
 	// fog
 	GLuint fogDensity = 0;
 	GLuint fogColor = 0;
+
+	GLuint waterHeight = 0;
 };
 
 Programs programs;
@@ -439,6 +441,8 @@ void createContext() {
 	// NOTE: Don't forget to delete the shader programs on the free() function
 	
 	// Get pointers to uniforms
+	u.waterHeight = glGetUniformLocation(programs.lighting, "waterHeight");
+	glUniform1f(u.waterHeight, waterHeight);
 	// --- programs.lighting ---
 	u.P = glGetUniformLocation(programs.lighting, "P");
 	u.V = glGetUniformLocation(programs.lighting, "V");
@@ -658,8 +662,8 @@ void createContext() {
 	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);*/
 	 waterTexture2 = loadTextureRepeat("assets/water2.bmp");
 
-	bottomTexture = loadTextureRepeat("assets/water.bmp");
-	maskTexture = loadSOIL("assets/lake_mask.bmp");
+	bottomTexture = loadTextureRepeat("assets/water-river-with-stones.jpg"); //water.bmp
+	maskTexture = loadSOIL("assets/lake_mask.bmp"); 
 
 	sunTexture = loadSOIL("assets/fiery.bmp");
 	glBindTexture(GL_TEXTURE_2D, sunTexture);

@@ -16,6 +16,9 @@ uniform sampler2D skyTex;
 uniform sampler2D shadowMapSampler2;
 uniform vec3 lightPosition_worldspace2;
 uniform int useTexture;
+uniform float waterHeight;
+
+//uniform float waterThreshold; 
  // 0: Simple Material (mtl struct) 
 // 1: Terrain/Lake Textures using mask
 // 2: Sun Sphere Texture (emmisive)
@@ -303,24 +306,29 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     if (useTexture == 1) {
         vec3 terrainColor = mix(
         texture(terrainTex, vertex_UV_tiled).rgb,
-        texture(terrainTex2, vertex_UV_tiled).rgb,
-        0.3);
+        texture(terrainTex2, vertex_UV_tiled).rgb,        0.3);
         vec2 waterUV1 = vertex_UV + vec2(time*0.005, time*0.005);
         vec2 waterUV2 = vertex_UV  + vec2(-time*0.003, time*0.007);
         vec3 waterColor = mix(
             texture(waterTex, waterUV1).rgb,
             texture(waterTex2, waterUV2).rgb,
             0.3    );
-        vec3 bottomColor = mix(texture(waterTex2, vertex_UV).rgb, texture(bottomTex, vertex_UV).rgb, 0.3);
-        lakeMask = smoothstep(0.0, 1.0, texture(maskTex, vertex_UV).r);
+        // Calculate if this fragment is at/below water level
+        float surfaceHeight = vertex_position_worldspace.y;
+        //lakeMask = step(surfaceHeight, waterHeight);
+        //vec3 bottomColor = mix(texture(waterTex2, vertex_UV).rgb, texture(bottomTex, vertex_UV).rgb, 0.3);
+        //lakeMask = smoothstep(0.0, 1.0, texture(maskTex, vertex_UV).r);
+        float maskValue = texture(maskTex, vertex_UV).r;
+        lakeMask = (maskValue > 0.5 && surfaceHeight <= waterHeight) ? 1.0 : 0.0;
         // NEW: During reflection pass, discard water pixels
         if (renderingReflection == 1 && lakeMask > 0.5) {
             discard;  // Don't render water in reflection
         }
-        vec3 finalWater = mix(bottomColor, waterColor, 0.6);
+        vec3 bottomColor = texture(bottomTex, vertex_UV).rgb;
+        vec3 finalWater = mix(bottomColor, waterColor, 0.9);
         
         // NEW: Add reflection to water
-        if (lakeMask > 0.5) {  // Only apply reflection to lake areas
+        if (lakeMask > 0.5 ) {  // Only apply reflection to lake areas
             // Calculate screen-space UV coordinates for reflection
             vec2 screenUV = gl_FragCoord.xy / vec2(textureSize(reflectionTex, 0));
             
