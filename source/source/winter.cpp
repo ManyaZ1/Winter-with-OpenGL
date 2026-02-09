@@ -117,6 +117,8 @@ GLuint wolfTexture;
 GLuint snowFlakeTexture;
 GLuint snowTexture;
 GLuint snowDetailTexture;
+//noise
+GLuint noiseTexture;
 
 
 
@@ -198,6 +200,8 @@ struct TexLocations {
 	
 	GLuint snowTex;
 	GLuint  snowDetailTex;
+
+	GLuint noiseTex;
 };
 
 struct Programs {
@@ -267,6 +271,7 @@ struct Uniforms {
 	GLuint fogColor = 0;
 
 	GLuint waterHeight = 0;
+
 };
 
 Programs programs;
@@ -687,6 +692,8 @@ void createContext() {
 	//snow
 	t.snowTex = glGetUniformLocation(programs.lighting, "snowTex");
 	t.snowDetailTex = glGetUniformLocation(programs.lighting, "snowDetailTex");
+	// noise
+	t.noiseTex = glGetUniformLocation(programs.lighting, "noiseTex");
 	// terrain
 	t.terrainTex = glGetUniformLocation(programs.lighting, "terrainTex");
 	t.terrainTex2 = glGetUniformLocation(programs.lighting, "terrainTex2");
@@ -870,6 +877,7 @@ void render_scene(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int 
 		glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, maskTexture);
 		glActiveTexture(GL_TEXTURE10); glBindTexture(GL_TEXTURE_2D, snowTexture);
 		glActiveTexture(GL_TEXTURE11); glBindTexture(GL_TEXTURE_2D, snowDetailTexture);
+		glActiveTexture(GL_TEXTURE12); glBindTexture(GL_TEXTURE_2D, noiseTexture);
 
 		glUniform1i(t.terrainTex, 0);
 		glUniform1i(t.terrainTex2, 1);
@@ -879,6 +887,7 @@ void render_scene(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int 
 		glUniform1i(t.maskTex, 5);
 		glUniform1i(t.snowTex, 10);
 		glUniform1i(t.snowDetailTex, 11);
+		glUniform1i(t.noiseTex, 12);
 		glUniform1f(glGetUniformLocation(programs.lighting, "time"), glfwGetTime());
 
 		mat4 terrainM = translate(mat4(), vec3(0.0f, 0.0f, 0.0f)) * scale(mat4(), vec3(SCALING_FACTOR));
@@ -1007,44 +1016,7 @@ void render_scene(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int 
 void reflection_pass(mat4 reflectionView, mat4 projectionMatrix) {
 	render_scene(reflectionView, projectionMatrix, W_WIDTH, W_HEIGHT, 0.0f, RenderMode::REFLECTION);
 }
-//void reflection_pass(mat4 reflectionView, mat4 projectionMatrix) {
-//	// Bind reflection framebuffer
-//	glBindFramebuffer(GL_FRAMEBUFFER, reflectionFBO);
-//	glViewport(0, 0, W_WIDTH, W_HEIGHT);
-//
-//	// Clear reflection buffer
-//	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-//
-//	// Enable front-face culling for reflection (mirrors geometry)
-//	glEnable(GL_CLIP_DISTANCE0);  // Optional: clip geometry below water
-//	glCullFace(GL_FRONT);
-//
-//	// Render the scene normally but with reflected view matrix
-//	// Call your existing rendering code here, but pass reflectionView instead of viewMatrix
-//
-//	// For example, render terrain, trees, animals, sky, etc.
-//	// This is the same as your normal lighting_pass() but with reflection camera
-//
-//	glUseProgram(programs.lighting);
-//
-//	// Upload reflection view and projection matrices
-//	glUniformMatrix4fv(u.V, 1, GL_FALSE, &reflectionView[0][0]);
-//	glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
-//
-//	// Render all objects that should be reflected
-//	// Example: terrain->draw();
-//	// Example: render trees, sky sphere, etc.
-//
-//	// IMPORTANT: Don't render the water itself in reflection pass
-//	// Only render objects that should appear in the reflection
-//
-//	// Restore normal culling
-//	glCullFace(GL_BACK);
-//	glDisable(GL_CLIP_DISTANCE0);
-//
-//	// Unbind framebuffer
-//	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-//}
+
 
 void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height, float currentFogDensity) {
 	render_scene(viewMatrix, projectionMatrix, screen_width, screen_height, currentFogDensity, RenderMode::NORMAL);
@@ -1151,17 +1123,22 @@ void lighting_pass_old(mat4 viewMatrix, mat4 projectionMatrix, int screen_width,
 	glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, bottomTexture);
 	glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, maskTexture);
 
-	//snoww
-	// === ADD SNOW TEXTURE HERE ===
-	glActiveTexture(GL_TEXTURE10);
-	glBindTexture(GL_TEXTURE_2D, snowTexture);
-	glUniform1i(t.snowTex, 10);  // Bind to slot 10
-	// =============================
-	// === ADD SNOW DETAIL TEXTURE ===
-	glActiveTexture(GL_TEXTURE11);
-	glBindTexture(GL_TEXTURE_2D, snowDetailTexture);
-	glUniform1i(t.snowDetailTex, 11);  // Bind to slot 11
-	// ===============================
+		//snoww
+		// === ADD SNOW TEXTURE HERE ===
+		glActiveTexture(GL_TEXTURE10);
+		glBindTexture(GL_TEXTURE_2D, snowTexture);
+		glUniform1i(t.snowTex, 10);  // Bind to slot 10
+		// =============================
+		// === ADD SNOW DETAIL TEXTURE ===
+		glActiveTexture(GL_TEXTURE11);
+		glBindTexture(GL_TEXTURE_2D, snowDetailTexture);
+		glUniform1i(t.snowDetailTex, 11);  // Bind to slot 11
+		// ===============================
+		// === ADD NOISE TEXTURE ===
+		glActiveTexture(GL_TEXTURE12);
+		glBindTexture(GL_TEXTURE_2D, noiseTexture);
+		glUniform1i(t.noiseTex, 12);  // Bind to slot 12
+		// =========================
 
 	glUniform1i(t.terrainTex, 0);
 	glUniform1i(t.terrainTex2, 1);
@@ -1737,6 +1714,8 @@ void mainLoop() {
 		fogAccumulationTime += deltaTime;
 		
 	}
+	snowLevel = glm::clamp(snowAccumulationTime / 50.0f, 0.0f, 1.0f);
+	reflectionStrength = glm::clamp(snowAccumulationTime / 50.0f, 0.2f, 0.6f);
 	if (!snowingEnabled) {
 		fogAccumulationTime -= deltaTime;
 	}
