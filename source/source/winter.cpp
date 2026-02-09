@@ -27,8 +27,8 @@
 #define AM_IMPLEMENTATION  // This "activates" the audio code here
 #include "../common/AudioManager.h"
 #define FULL_SCREEN 0
-#define W_WIDTH  1000
-#define W_HEIGHT  700
+#define W_WIDTH  1280
+#define W_HEIGHT  720
 #define TITLE "Winter"
 AudioManager audio;
 
@@ -1262,7 +1262,7 @@ void mainLoop() {
 	// get screen size
 	int fb_width, fb_height;
 	glfwGetFramebufferSize(window, &fb_width, &fb_height);
-	snowAccumulationTime = -5.0f; //initially no snow lands, so start negative to delay
+	snowAccumulationTime = -4.0f; //initially no snow lands, so start negative to delay
 	float fogStopedTime = 0.0f;
 	//float fogDensity = 0.0f;
 	do {
