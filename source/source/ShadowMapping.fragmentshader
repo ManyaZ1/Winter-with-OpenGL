@@ -355,8 +355,21 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         
         // Mix with frozen color
         waterColor = mix(desaturated, frozenColor, freezeFactor * 0.6);
-        float noise = texture(noiseTex, vertex_UV * 3.0).r;
-        waterColor = mix(waterColor, waterColor * (0.85 + 0.15 * noise), freezeFactor);
+        //float noise = texture(noiseTex, vertex_UV * 3.0).r;
+        // 1. Create a "Milky" base using FBM or layered noise
+        float baseNoise = texture(noiseTex, vertex_UV * 7.0).r;
+        //float fineDetail = texture( snowDetailTex, vertex_UV * 100.0).r;
+        float iceTexture = baseNoise;//mix(baseNoise, fineDetail, 0.3);
+
+        // 2. Simulate "Cracks" or "Bubbles" (Using a high-contrast noise)
+        //float bubbles = smoothstep(0.6, 0.7, fineDetail) * 0.3; 
+
+        // 3. Apply to waterColor
+        //  noise to add "whiteness" (frost) and "darkness" (depth)
+        vec3 iceBase = mix(waterColor, vec3(0.9, 0.9, 1.0), iceTexture * 0.4);
+        //iceBase += bubbles; // Add white flecks for trapped air
+
+        waterColor = mix(waterColor, iceBase, freezeFactor);
         vec3 bottomColor = texture(bottomTex, vertex_UV).rgb;
         vec3 finalWater = mix(bottomColor, waterColor, 0.9);
         

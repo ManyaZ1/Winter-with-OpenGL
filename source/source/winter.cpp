@@ -671,6 +671,10 @@ void createContext() {
 	maskTexture = loadSOIL("assets/lake_mask.bmp"); 
 
 	sunTexture = loadSOIL("assets/fiery.bmp");
+
+	noiseTexture = loadTextureRepeat("assets/voronoi_noise.png");
+
+
 	glBindTexture(GL_TEXTURE_2D, sunTexture);
 	/*glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, 0x2803, GL_REPEAT);*/
@@ -812,23 +816,24 @@ void render_scene(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int 
 	//glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
 
 	// --- 1. SKY DOME ---
-	resetDefaultStates();
-	glDisable(GL_CULL_FACE);
-	glDepthFunc(GL_LEQUAL);
-	glDepthMask(GL_FALSE);
-	glUniform1i(u.useTexture, 3);
-	glUniform1f(u.normDir, -1.0f);
-	glActiveTexture(GL_TEXTURE7);
-	glBindTexture(GL_TEXTURE_2D, skyTexture);
-	glUniform1i(t.skyTex, 7);
-	mat4 skyM = translate(mat4(1.0f), camera->position) * scale(mat4(1.0f), vec3(30.0f));
-	glUniformMatrix4fv(u.M, 1, GL_FALSE, &skyM[0][0]);
-	sphere->bind();
-	sphere->draw();
-	glEnable(GL_CULL_FACE);
-	glDepthFunc(GL_LESS);
-	glDepthMask(GL_TRUE);
-
+	if (mode != RenderMode::REFLECTION) {
+		resetDefaultStates();
+		glDisable(GL_CULL_FACE);
+		glDepthFunc(GL_LEQUAL);
+		glDepthMask(GL_FALSE);
+		glUniform1i(u.useTexture, 3);
+		glUniform1f(u.normDir, -1.0f);
+		glActiveTexture(GL_TEXTURE7);
+		glBindTexture(GL_TEXTURE_2D, skyTexture);
+		glUniform1i(t.skyTex, 7);
+		mat4 skyM = translate(mat4(1.0f), camera->position) * scale(mat4(1.0f), vec3(30.0f));
+		glUniformMatrix4fv(u.M, 1, GL_FALSE, &skyM[0][0]);
+		sphere->bind();
+		sphere->draw();
+		glEnable(GL_CULL_FACE);
+		glDepthFunc(GL_LESS);
+		glDepthMask(GL_TRUE);
+	}
 	// --- 2. LIGHTING GLOBALS ---
 	glUniform1i(u.useInstancing, 0);
 	uploadLight(*light);
@@ -1715,7 +1720,7 @@ void mainLoop() {
 		
 	}
 	snowLevel = glm::clamp(snowAccumulationTime / 50.0f, 0.0f, 1.0f);
-	reflectionStrength = glm::clamp(snowAccumulationTime / 50.0f, 0.2f, 0.6f);
+	reflectionStrength = glm::clamp(snowAccumulationTime / 50.0f, 0.2f, 0.5f);
 	if (!snowingEnabled) {
 		fogAccumulationTime -= deltaTime;
 	}

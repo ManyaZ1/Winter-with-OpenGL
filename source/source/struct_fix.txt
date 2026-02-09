@@ -1,9 +1,0 @@
-Add this to the TexLocations struct after the snowDetailTex line:
-
-	// noise
-	GLuint noiseTex;
-
-Also add after the snow system initialization:
-
-	//noise texture
-	noiseTexture = loadTextureRepeat("assets/gray.bmp");
