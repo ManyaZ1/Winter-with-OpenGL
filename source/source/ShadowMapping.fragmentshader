@@ -34,7 +34,12 @@ uniform sampler2D bottomTex;    // Optional lake bottom
 uniform sampler2D maskTex;      // White = lake
 uniform float time;             // for water animation
 uniform sampler2D sunTex;
-// treee
+
+// Lake Reflection texture
+uniform sampler2D reflectionTex;
+uniform float reflectionStrength; // 0.0 to 1.0, controls reflection intensity
+uniform int renderingReflection; 
+// trees texures
 uniform sampler2D trunkTex;   // Slot 0 (Bark JPG)
 uniform sampler2D needleTex;  // Slot 1 (Needle PNG)
 uniform sampler2D needleTex2;  // Second needle texture
@@ -275,7 +280,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             _Kd.rgb = texture(trunkTex, barkUV).rgb;
         } else {
         // NEEDLES: Select texture based on instance index
-            vec2 branchUV = vec2((vertex_UV.x - 0.5) * 2.0, vertex_UV.y) * vec2(8.0, 8.0);
+            vec2 branchUV = vec2((vertex_UV.x - 0.5) * 2.0, vertex_UV.y) * vec2(5.0, 5.0); //*repetition factor
         
             vec4 texColor;
             // Switch between different needle textures based on textureIndex
@@ -290,7 +295,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         if (texColor.a < 0.1) discard; 
             _Kd.rgb = texColor.rgb;
     }
-        _Ka.rgb = 0.1 * _Kd.rgb;
+        _Ka.rgb = 0.07 * _Kd.rgb;
         _Ks.rgb = vec3(0.1); 
         _Ns = 5.0;
     }
@@ -308,8 +313,35 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             0.3    );
         vec3 bottomColor = mix(texture(waterTex2, vertex_UV).rgb, texture(bottomTex, vertex_UV).rgb, 0.3);
         lakeMask = smoothstep(0.0, 1.0, texture(maskTex, vertex_UV).r);
+        // NEW: During reflection pass, discard water pixels
+        if (renderingReflection == 1 && lakeMask > 0.5) {
+            discard;  // Don't render water in reflection
+        }
         vec3 finalWater = mix(bottomColor, waterColor, 0.6);
+        
+        // NEW: Add reflection to water
+        if (lakeMask > 0.5) {  // Only apply reflection to lake areas
+            // Calculate screen-space UV coordinates for reflection
+            vec2 screenUV = gl_FragCoord.xy / vec2(textureSize(reflectionTex, 0));
+            
+            // Add wave distortion to reflection based on water animation
+            float wave1 = sin(time * 0.8 + vertex_UV.x * 15.0 + vertex_UV.y * 10.0);
+            float wave2 = cos(time * 0.5 - vertex_UV.x * 8.0 + vertex_UV.y * 12.0);
+            float wave3 = sin(time * 1.2 + vertex_UV.x * 20.0 - vertex_UV.y * 5.0);
     
+            // Combine waves for more natural distortion
+            vec2 waveDistortion = vec2(
+                (wave1 + wave2 * 0.5) * 0.01,
+                (wave2 + wave3 * 0.5) * 0.001
+            );
+            vec2 reflectionUV = screenUV + waveDistortion;
+            
+            // Sample reflection texture
+            vec3 reflectionColor = texture(reflectionTex, reflectionUV).rgb;
+            
+            // Blend reflection with water color based on reflectionStrength
+            finalWater = mix(finalWater, reflectionColor, reflectionStrength);
+        }
         //lake mask
         _Kd.rgb = mix(terrainColor, finalWater, lakeMask);
         _Ka.rgb = 0.05 * _Kd.rgb;
@@ -339,7 +371,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         _Kd.rgb = texColor.rgb;
         
         // Define material properties for fur/skin
-        _Ka.rgb = 0.5 * _Kd.rgb; // Ambient intensity
+        _Ka.rgb = 0.6 * _Kd.rgb; // Ambient intensity
         _Ks.rgb = vec3(0.1);      // specularity 
         _Ns = 3.0;               // Shininess factor
         

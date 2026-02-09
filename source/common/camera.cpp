@@ -136,3 +136,116 @@ void Camera::update() {
     // For the next frame, the "last time" will be "now"
     lastTime = currentTime;
 }
+// NEW METHOD: Get reflection view matrix for water reflections
+//mat4 Camera::getReflectionViewMatrix(float waterHeight) {
+//    // Calculate reflected camera position
+//    vec3 reflectedPosition = position;
+//    reflectedPosition.y = 2.0f * waterHeight - position.y;
+//
+//    // Calculate direction vector (where camera is looking)
+//    vec3 direction(
+//        cos(verticalAngle) * sin(horizontalAngle),
+//        sin(verticalAngle),
+//        cos(verticalAngle) * cos(horizontalAngle)
+//    );
+//
+//    // Reflect the vertical angle (invert the Y component of direction)
+//    vec3 reflectedDirection = direction;
+//    reflectedDirection.y = -reflectedDirection.y;
+//
+//    // Calculate right and up vectors for reflected camera
+//    vec3 right(
+//        sin(horizontalAngle - 3.14f / 2.0f),
+//        0,
+//        cos(horizontalAngle - 3.14f / 2.0f)
+//    );
+//
+//    // Up vector stays the same for reflection
+//    vec3 up = cross(right, reflectedDirection);
+//
+//    // Create reflection view matrix
+//    return lookAt(
+//        reflectedPosition,
+//        reflectedPosition + reflectedDirection,
+//        up
+//    );
+//}
+//mat4 Camera::getReflectionViewMatrix(float waterHeight) {
+//    // Calculate reflected camera position (flip Y across water plane)
+//    vec3 reflectedPosition = position;
+//    reflectedPosition.y = 2.0f * waterHeight - position.y;
+//
+//    // Calculate NORMAL direction vector (same as regular camera)
+//    vec3 direction(
+//        cos(verticalAngle) * sin(horizontalAngle),
+//        sin(verticalAngle),
+//        cos(verticalAngle) * cos(horizontalAngle)
+//    );
+//
+//    
+//    // Just use normal direction with reflected position
+//
+//    // Calculate right and up vectors (same as regular camera)
+//    vec3 right(
+//        sin(horizontalAngle - 3.14f / 2.0f),
+//        0,
+//        cos(horizontalAngle - 3.14f / 2.0f)
+//    );
+//
+//    vec3 up = cross(right, direction);
+//
+//    // Create view matrix with reflected position but NORMAL direction
+//    return lookAt(
+//        reflectedPosition,
+//        reflectedPosition + direction,  //Use normal direction, not flipped!
+//        up
+//    );
+//}
+// Helper function: Create reflection matrix for a plane
+mat4 getReflectionMatrix(vec3 planePoint, vec3 planeNormal) {
+    planeNormal = normalize(planeNormal);
+    float d = -dot(planeNormal, planePoint);
+
+    // Reflection matrix for plane: ax + by + cz + d = 0
+    mat4 R = mat4(1.0f);  // Start with identity
+
+    R[0][0] = 1.0f - 2.0f * planeNormal.x * planeNormal.x;
+    R[1][0] = -2.0f * planeNormal.x * planeNormal.y;
+    R[2][0] = -2.0f * planeNormal.x * planeNormal.z;
+    R[3][0] = -2.0f * planeNormal.x * d;
+
+    R[0][1] = -2.0f * planeNormal.y * planeNormal.x;
+    R[1][1] = 1.0f - 2.0f * planeNormal.y * planeNormal.y;
+    R[2][1] = -2.0f * planeNormal.y * planeNormal.z;
+    R[3][1] = -2.0f * planeNormal.y * d;
+
+    R[0][2] = -2.0f * planeNormal.z * planeNormal.x;
+    R[1][2] = -2.0f * planeNormal.z * planeNormal.y;
+    R[2][2] = 1.0f - 2.0f * planeNormal.z * planeNormal.z;
+    R[3][2] = -2.0f * planeNormal.z * d;
+
+    R[0][3] = 0.0f;
+    R[1][3] = 0.0f;
+    R[2][3] = 0.0f;
+    R[3][3] = 1.0f;
+
+    return R;
+}
+
+// Main reflection function
+mat4 Camera::getReflectionViewMatrix(float waterHeight) {
+    // Define water plane: point on plane and normal vector
+    vec3 waterPlanePoint = vec3(0.0f, waterHeight, 0.0f);
+    vec3 waterPlaneNormal = vec3(0.0f, 1.0f, 0.0f);  // Pointing up
+
+    // Get reflection matrix for the water plane
+    mat4 reflectionMatrix = getReflectionMatrix(waterPlanePoint, waterPlaneNormal);
+
+    // Apply reflection to the INVERSE view matrix
+    // (because view matrix transforms world->camera, we need camera->world first)
+    mat4 inverseView = inverse(viewMatrix);
+    mat4 mirroredInverseView = reflectionMatrix * inverseView;
+
+    // Convert back to view matrix
+    return inverse(mirroredInverseView);
+}

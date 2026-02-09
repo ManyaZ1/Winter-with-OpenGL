@@ -22,7 +22,8 @@ public:
 
     Camera(GLFWwindow* window);
     void update();
-	float getHeightAtXZ(float x, float z);
+	//float getHeightAtXZ(float x, float z);
+    glm::mat4 getReflectionViewMatrix(float waterHeight);
 };
 
 #endif

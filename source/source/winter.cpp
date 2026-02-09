@@ -3,7 +3,6 @@
 #include <string>
 // Include GLEW
 #include <GL/glew.h>
-
 // Include GLFW
 #include <glfw3.h>
 #include <fstream>
@@ -66,10 +65,17 @@ Drawable* terrain;
 Drawable* plane;
 GLuint modelDiffuseTexture, modelSpecularTexture;
 GLuint depthFBO, depthTexture;
-//GLuint depthFBO2, depthTexture2;
-// Global instance to hold your terrain data after loading
 
-Drawable* quad;
+enum class RenderMode {
+	NORMAL,       // Standard rendering
+	REFLECTION,   // For reflection pass (skip water, flip culling)
+	SHADOW        // For shadow pass (already separate)
+};
+// ===== lake reflection =====//
+GLuint reflectionFBO, reflectionTexture, reflectionDepthRBO;
+float reflectionStrength = 0.2f;  // Start with 0.2 for subtle reflection
+float waterHeight = 3.21598f;         // Y-coordinate of water surface ... no
+
 
 // tree
 Drawable* treeModel1; 
@@ -111,8 +117,7 @@ GLuint wolfTexture;
 GLuint snowFlakeTexture;
 GLuint snowTexture;
 GLuint snowDetailTexture;
-// locations for miniMapProgram
-//GLuint quadTextureSamplerLocation;
+
 
 
 // clouds
@@ -213,6 +218,10 @@ struct Uniforms {
 	GLuint Ks = 0;
 	GLuint Ns = 0;
 
+	// Reflection
+	GLuint reflectionTex = 0;
+	GLuint reflectionStrength = 0;
+	GLuint renderingReflection = 0;
 	// light
 	GLuint La = 0;
 	GLuint Ld = 0;
@@ -310,7 +319,10 @@ void setShaderMode(int mode, bool instanced = false) {
 		for (int i = 4; i <= 8; i++) glDisableVertexAttribArray(i);
 	}
 }
-
+//GL_CLAMP_TO_BORDER (Current Code)
+//•	Samples outside texture bounds return the border color(white = 1.0f)
+//•	For depth maps : White border means "infinite depth" → areas outside shadow frustum are always lit(no shadow)
+//•	Benefit : Clean shadow boundaries, no artifacts at frustum edges
 void createDepthFBOAndTexture(GLuint& fboID, GLuint& textureID) {
 	// 1. Generate FBO
 	glGenFramebuffers(1, &fboID);
@@ -350,6 +362,41 @@ void createDepthFBOAndTexture(GLuint& fboID, GLuint& textureID) {
 	// Unbind the FBO before exiting the function
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+// clamp to edge for reflection fbo
+void createReflectionFBO(GLuint& fboID, GLuint& textureID, GLuint& depthRBO, int width, int height) {
+	// 1. Generate FBO
+	glGenFramebuffers(1, &fboID);
+	glBindFramebuffer(GL_FRAMEBUFFER, fboID);
+
+	// 2. Generate Color Texture (for reflection image)
+	glGenTextures(1, &textureID);
+	glBindTexture(GL_TEXTURE_2D, textureID);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+
+	// Texture parameters - CLAMP_TO_EDGE for water reflection
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	// 3. Attach Color Texture to FBO
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureID, 0);
+
+	// 4. Create Depth Renderbuffer (for proper depth testing)
+	glGenRenderbuffers(1, &depthRBO);
+	glBindRenderbuffer(GL_RENDERBUFFER, depthRBO);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
+
+	// 5. Check Status
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		throw std::runtime_error("Reflection framebuffer not initialized correctly");
+	}
+
+	// 6. Unbind
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 
 void free() {
 	delete cloudSystem;
@@ -390,7 +437,7 @@ void createContext() {
 	// BEGIN WITH INSTANCING 0
 
 	// NOTE: Don't forget to delete the shader programs on the free() function
-
+	
 	// Get pointers to uniforms
 	// --- programs.lighting ---
 	u.P = glGetUniformLocation(programs.lighting, "P");
@@ -445,6 +492,10 @@ void createContext() {
 	u.xbiassnow = glGetUniformLocation(programs.snow, "x_bias");
 	u.zbiassnow = glGetUniformLocation(programs.snow, "z_bias");
 
+	// ======================================== LAKE REFLECTION UNIFORMS ========================================= //
+	u.reflectionTex = glGetUniformLocation(programs.lighting, "reflectionTex");
+	u.reflectionStrength = glGetUniformLocation(programs.lighting, "reflectionStrength");
+	u.renderingReflection = glGetUniformLocation(programs.lighting, "renderingReflection");
 	// Snow accumulation uniforms
 	GLuint snowAccumMapLoc = glGetUniformLocation(programs.lighting, "snowAccumMap");
 	GLuint skyVPLoc = glGetUniformLocation(programs.lighting, "skyVP");
@@ -460,7 +511,7 @@ void createContext() {
 
 	// Loading a model
 	// The terrain object from Gaea is loaded as terrain
-	std::string modelPath = "assets/Mesher_LOD3.obj";
+	std::string modelPath = "assets/Mesher_LOD3_flat_lake.obj"; //"assets/Mesher_LOD3.obj";
 	terrain = new Drawable(modelPath);
 
 	
@@ -515,19 +566,6 @@ void createContext() {
 	trunkTexture = loadTextureRepeat("assets/bark.png");
 
 	needleTexture = loadTextureRepeat("assets/tree2.jpg");
-
-	//// FOREST SYSTEM
-	////forest = new Forest(treeModel1, programs.lighting, 100); // 100 trees
-	//float scale = SCALING_FACTOR; // 200
-	//forest->setTerrainBounds(
-	//	-scale / 2, scale / 2,  // X bounds
-	//	-scale / 2, scale / 2,  // Z bounds
-	//	0.0f, 50.0f,        // Y bounds
-	//	1.0f              // scaling factor //? the heightmap is already scaled
-	//);
-	//forest->loadTerrainBinary("assets/heightmap/terrain_data.bin");
-	//// Generate tree positions
-	//forest->generate();
 	
 	// ========================================= APPLE & PINE FOREST ========================================= //
 	// ================== APPLE  FOREST ================== //
@@ -577,7 +615,6 @@ void createContext() {
 		treePositions.push_back(t.position);
 	bushes->setTreeReferences(treePositions);
 	bushes->generate();
-	
 
 	// 3 bush textures
 	bushTexture1 = loadTextureRepeat("assets/pixel_bush.png");
@@ -605,6 +642,8 @@ void createContext() {
 	// snow fbo
 	createDepthFBOAndTexture(snowAccumFBO, snowAccumTexture);
 
+	// water
+	createReflectionFBO(reflectionFBO, reflectionTexture, reflectionDepthRBO, W_WIDTH, W_HEIGHT);
 
 	/*==================================== load textures =======================================*/
 	snowTexture = loadTextureRepeat("assets/snow.bmp"); 
@@ -629,7 +668,7 @@ void createContext() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-	skyTexture = loadSOIL("assets/sky5.jpg"); //sky5.jpg
+	skyTexture = loadSOIL("assets/sky5.png"); //sky5.jpg
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
@@ -690,6 +729,7 @@ void createContext() {
 	//snowFlakeTexture = loadSOIL("assets/circle.png"); //no longer used, left for future testing (snowflake shape)
 	snowSystem = new SnowSystem(10000);
 	snowSystem->initialize(programs.snow, snowFlakeTexture);
+
 	//everything orange fix
 	//// CRITICAL: Disable instancing attributes for non-instanced rendering
 	//glDisableVertexAttribArray(4);
@@ -704,7 +744,6 @@ void createContext() {
 	//glVertexAttrib4f(6, 0.0f, 0.0f, 0.0f, 0.0f);
 	//glVertexAttrib4f(7, 0.0f, 0.0f, 0.0f, 0.0f);
 	//glVertexAttribI4i(8, 0, 0, 0, 0);
-
 }
 
 // Helper to reset common states to prevent leakage
@@ -728,7 +767,286 @@ mat4 getSkyProjectionMatrix() {
 	float halfSize = SCALING_FACTOR / 2.0f; // Match  terrain bounds
 	return ortho(-halfSize, halfSize, -halfSize, halfSize, 1.0f, 300.0f);
 }
+void render_scene(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height,
+	float currentFogDensity, RenderMode mode = RenderMode::NORMAL) {
+
+	// Setup based on mode
+	if (mode == RenderMode::REFLECTION) {
+		glBindFramebuffer(GL_FRAMEBUFFER, reflectionFBO);
+		glCullFace(GL_FRONT);  // Flip culling for reflection
+		/*mat4 reflectionMatrix = scale(mat4(1.0f), vec3(1.0f, -1.0f, 1.0f));
+		mat4 reflectedView = viewMatrix * reflectionMatrix;
+		glUseProgram(programs.lighting);
+		glUniformMatrix4fv(u.V, 1, GL_FALSE, &reflectedView[0][0]);
+		glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);*/
+		glUseProgram(programs.lighting);
+		glUniformMatrix4fv(u.V, 1, GL_FALSE, &viewMatrix[0][0]);  // Already reflected!
+		glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
+		glUniform1i(u.renderingReflection, 1);
+	}
+	else {
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glCullFace(GL_BACK);
+		glUseProgram(programs.lighting);
+		glUniformMatrix4fv(u.V, 1, GL_FALSE, &viewMatrix[0][0]);
+		glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
+		glUniform1i(u.renderingReflection, 0);
+	}
+
+	glViewport(0, 0, screen_width, screen_height);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	//glUseProgram(programs.lighting);
+	//glUniformMatrix4fv(u.V, 1, GL_FALSE, &viewMatrix[0][0]);
+	//glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
+
+	// --- 1. SKY DOME ---
+	resetDefaultStates();
+	glDisable(GL_CULL_FACE);
+	glDepthFunc(GL_LEQUAL);
+	glDepthMask(GL_FALSE);
+	glUniform1i(u.useTexture, 3);
+	glUniform1f(u.normDir, -1.0f);
+	glActiveTexture(GL_TEXTURE7);
+	glBindTexture(GL_TEXTURE_2D, skyTexture);
+	glUniform1i(t.skyTex, 7);
+	mat4 skyM = translate(mat4(1.0f), camera->position) * scale(mat4(1.0f), vec3(30.0f));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &skyM[0][0]);
+	sphere->bind();
+	sphere->draw();
+	glEnable(GL_CULL_FACE);
+	glDepthFunc(GL_LESS);
+	glDepthMask(GL_TRUE);
+
+	// --- 2. LIGHTING GLOBALS ---
+	glUniform1i(u.useInstancing, 0);
+	uploadLight(*light);
+	mat4 lightVP = light->lightVP();
+	glUniformMatrix4fv(u.lightVP, 1, GL_FALSE, &lightVP[0][0]);
+	glUniform3fv(u.lightDir, 1, &light->direction[0]);
+
+	// Bind Shadow Map
+	glActiveTexture(GL_TEXTURE8);
+	glBindTexture(GL_TEXTURE_2D, depthTexture);
+	glUniform1i(u.depthMap, 8);
+
+	// Snow accumulation
+	glActiveTexture(GL_TEXTURE9);
+	glBindTexture(GL_TEXTURE_2D, snowAccumTexture);
+	glUniform1i(u.snowAccumMap, 9);
+	mat4 skyVP = getSkyProjectionMatrix() * getSkyViewMatrix();
+	glUniformMatrix4fv(u.skyVP, 1, GL_FALSE, &skyVP[0][0]);
+	glUniform1f(u.snowAmount, snowLevel);
+
+	// Reflection texture (only bind in NORMAL mode)
+
+	if (mode == RenderMode::NORMAL) {
+		glActiveTexture(GL_TEXTURE15);
+		glBindTexture(GL_TEXTURE_2D, reflectionTexture);
+		glUniform1i(u.reflectionTex, 15);
+		glUniform1f(u.reflectionStrength, reflectionStrength);
+	}
+
+	// --- 3. TERRAIN (SKIP IN REFLECTION MODE) ---
+	//if (mode != RenderMode::REFLECTION) {
+		glUniform1i(u.useInstancing, 0);
+		resetDefaultStates();
+		glUniform1i(u.useTexture, 1);
+		float repeats_on_surface = 600.0f;
+		float uvTile = repeats_on_surface / SCALING_FACTOR;
+		glUniform2f(u.uvScale, uvTile, uvTile);
+		glUniform1f(u.scalingFactor, SCALING_FACTOR);
+
+		// Bind terrain textures
+		glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, terrainTexture);
+		glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, terrainTexture2);
+		glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, waterTexture);
+		glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, waterTexture2);
+		glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, bottomTexture);
+		glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, maskTexture);
+		glActiveTexture(GL_TEXTURE10); glBindTexture(GL_TEXTURE_2D, snowTexture);
+		glActiveTexture(GL_TEXTURE11); glBindTexture(GL_TEXTURE_2D, snowDetailTexture);
+
+		glUniform1i(t.terrainTex, 0);
+		glUniform1i(t.terrainTex2, 1);
+		glUniform1i(t.waterTex, 2);
+		glUniform1i(t.waterTex2, 3);
+		glUniform1i(t.bottomTex, 4);
+		glUniform1i(t.maskTex, 5);
+		glUniform1i(t.snowTex, 10);
+		glUniform1i(t.snowDetailTex, 11);
+		glUniform1f(glGetUniformLocation(programs.lighting, "time"), glfwGetTime());
+
+		mat4 terrainM = translate(mat4(), vec3(0.0f, 0.0f, 0.0f)) * scale(mat4(), vec3(SCALING_FACTOR));
+		glUniformMatrix4fv(u.M, 1, GL_FALSE, &terrainM[0][0]);
+		terrain->bind();
+		terrain->draw();
+	//}
+
+	// --- 4. TREES (ALWAYS RENDER) ---
+	resetDefaultStates();
+	glUniform1i(u.useInstancing, 1);
+	glUniform1i(u.useTexture, 5);
+	glUniform2f(u.uvScale, 1.0f, 1.0f);
+	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, trunkTexture);
+	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, needleTexture);
+	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, treeDiffuseTex2);
+	glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, chrysTexture);
+	glUniform1i(t.trunkTex, 0);
+	glUniform1i(t.needleTex, 1);
+	glUniform1i(t.needleTex2, 2);
+	glUniform1i(t.needleTex3, 3);
+	pineForest->draw();
+
+	resetDefaultStates();
+	glUniform1i(u.useInstancing, 1);
+	glUniform1i(u.useTexture, 7);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, appleTexture);
+	glUniform1i(u.diffuseSampler, 0);
+	appleForest->draw();
+	glUniform1i(u.useInstancing, 0);
+
+	// --- 5. SUN ---
+	resetDefaultStates();
+	glUniform1i(u.useTexture, 2);
+	glUniform1f(u.normDir, -1.0f);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, sunTexture);
+	glUniform1i(glGetUniformLocation(programs.lighting, "sunTex"), 0);
+	vec3 sunPos = light->sun_pos;
+	mat4 sunM = translate(mat4(1.0f), sunPos) * scale(mat4(1.0f), vec3(2.0f));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &sunM[0][0]);
+	sphere->bind();
+	sphere->draw();
+
+	// --- 6. BUSHES ---
+	resetDefaultStates();
+	glUniform1i(u.useTexture, 6);
+	glUniform1i(u.useInstancing, 1);
+	glUniform2f(u.uvScale, 1.0f, 1.0f);
+	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, bushTexture1);
+	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, bushTexture2);
+	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, bushTexture3);
+	glUniform1i(t.bushTex1, 0);
+	glUniform1i(t.bushTex2, 1);
+	glUniform1i(t.bushTex3, 2);
+	bushes->draw();
+	glUniform1i(u.useInstancing, 0);
+
+	// --- 7. ANIMALS ---
+	int gridRes = 1024;
+	float minX = -100.0f, maxX = 100.0f;
+	float minZ = -100.0f, maxZ = 100.0f;
+
+	// Deer
+	resetDefaultStates();
+	glUniform1i(u.useTexture, 7);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, deerTexture);
+	glUniform1i(u.diffuseSampler, 0);
+	deerX = 18.0f;
+	deerZ = 24.0f;
+	heightData = getHeightDataOnly("assets/heightmap/terrain_data.bin");
+	deerY = sampleHeightAt(deerX, deerZ, heightData, gridRes, minX, maxX, minZ, maxZ);
+	mat4 deerM = translate(mat4(1.0f), vec3(deerX, deerY, deerZ)) * scale(mat4(1.0f), vec3(1.0f));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &deerM[0][0]);
+	deerModel->bind();
+	deerModel->draw();
+
+	// Bear
+	resetDefaultStates();
+	glUniform1i(u.useTexture, 7);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, bearTexture);
+	glUniform1i(u.diffuseSampler, 0);
+	bearX = -22.0f;
+	bearZ = -25.0f;
+	bearY = sampleHeightAt(bearX, bearZ, heightData, gridRes, minX, maxX, minZ, maxZ);
+	mat4 bearM = translate(mat4(1.0f), vec3(bearX, bearY, bearZ)) * scale(mat4(1.0f), vec3(2.0f));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &bearM[0][0]);
+	bearModel->bind();
+	bearModel->draw();
+
+	// Polar Bear
+	resetDefaultStates();
+	glUniform1i(u.useTexture, 7);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, polarbearTexture);
+	glUniform1i(u.diffuseSampler, 0);
+	polarbearX = -22.0f;
+	polarbearZ = 39.0f;
+	polarbearY = sampleHeightAt(polarbearX, polarbearZ, heightData, gridRes, minX, maxX, minZ, maxZ);
+	mat4 polarbearM = translate(mat4(1.0f), vec3(polarbearX, polarbearY, polarbearZ)) * scale(mat4(1.0f), vec3(2.0f));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &polarbearM[0][0]);
+	bearModel->bind();
+	bearModel->draw();
+
+	// Wolf
+	resetDefaultStates();
+	glUniform1i(u.useTexture, 7);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, wolfTexture);
+	glUniform1i(u.diffuseSampler, 0);
+	wolfX = 30.0f;
+	wolfZ = -15.0f;
+	wolfY = sampleHeightAt(wolfX, wolfZ, heightData, gridRes, minX, maxX, minZ, maxZ);
+	mat4 wolfM = translate(mat4(1.0f), vec3(wolfX, wolfY, wolfZ)) * scale(mat4(1.0f), vec3(0.35f));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &wolfM[0][0]);
+	wolfModel->bind();
+	wolfModel->draw();
+
+	// Restore culling
+	glCullFace(GL_BACK);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+void reflection_pass(mat4 reflectionView, mat4 projectionMatrix) {
+	render_scene(reflectionView, projectionMatrix, W_WIDTH, W_HEIGHT, 0.0f, RenderMode::REFLECTION);
+}
+//void reflection_pass(mat4 reflectionView, mat4 projectionMatrix) {
+//	// Bind reflection framebuffer
+//	glBindFramebuffer(GL_FRAMEBUFFER, reflectionFBO);
+//	glViewport(0, 0, W_WIDTH, W_HEIGHT);
+//
+//	// Clear reflection buffer
+//	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+//
+//	// Enable front-face culling for reflection (mirrors geometry)
+//	glEnable(GL_CLIP_DISTANCE0);  // Optional: clip geometry below water
+//	glCullFace(GL_FRONT);
+//
+//	// Render the scene normally but with reflected view matrix
+//	// Call your existing rendering code here, but pass reflectionView instead of viewMatrix
+//
+//	// For example, render terrain, trees, animals, sky, etc.
+//	// This is the same as your normal lighting_pass() but with reflection camera
+//
+//	glUseProgram(programs.lighting);
+//
+//	// Upload reflection view and projection matrices
+//	glUniformMatrix4fv(u.V, 1, GL_FALSE, &reflectionView[0][0]);
+//	glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
+//
+//	// Render all objects that should be reflected
+//	// Example: terrain->draw();
+//	// Example: render trees, sky sphere, etc.
+//
+//	// IMPORTANT: Don't render the water itself in reflection pass
+//	// Only render objects that should appear in the reflection
+//
+//	// Restore normal culling
+//	glCullFace(GL_BACK);
+//	glDisable(GL_CLIP_DISTANCE0);
+//
+//	// Unbind framebuffer
+//	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+//}
+
 void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height, float currentFogDensity) {
+	render_scene(viewMatrix, projectionMatrix, screen_width, screen_height, currentFogDensity, RenderMode::NORMAL);
+}
+
+void lighting_pass_old(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height, float currentFogDensity) {
 	
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -802,6 +1120,14 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	//	snowLevel = min(snowAccumulationTime / 30.0f, 1.0f); // 30 seconds to full coverage
 	//}
 	glUniform1f(u.snowAmount, snowLevel);
+
+	// === lake reflection setup ===
+	glActiveTexture(GL_TEXTURE15);  // Use texture unit 15 (or any free slot)
+	glBindTexture(GL_TEXTURE_2D, reflectionTexture);
+	glUniform1i(u.reflectionTex, 15);
+	// Set reflection strength
+	glUniform1f(u.reflectionStrength, reflectionStrength);
+
 
 	// 3. TERRAIN
 	glUniform1i(u.useInstancing, 0);
@@ -998,7 +1324,8 @@ void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int
 	float minX = -100.0f, maxX = 100.0f;
 	float minZ = -100.0f, maxZ = 100.0f;
 
-
+	//float waterHeight = sampleHeightAt(0.0f, 10.0f, heightData, gridRes, minX, maxX, minZ, maxZ);
+	//cout << "Water height at (0,0): " << waterHeight << endl;
 	//8. DEER 
 	//LOAD DEER OBJECT 
 	resetDefaultStates();
@@ -1415,6 +1742,10 @@ void mainLoop() {
 	//fogDensity = snowingEnabled ? min(fogAccumulationTime / 40.0f, 1.0f) : max(fogDensity -(fogStopedTime)/40.0f,0.0f); // Full fog when snowing, no fog otherwise
 	//
 	vec3 fogColor = vec3(0.8f, 0.85f, 0.9f); // Light grayish-blue fog color
+
+	// 1. Generate reflection texture
+	mat4 reflectionView = camera->getReflectionViewMatrix(waterHeight);
+	reflection_pass(reflectionView, projectionMatrix);
 
 	// Rendering the scene from light's perspective when F1 is pressed
 
