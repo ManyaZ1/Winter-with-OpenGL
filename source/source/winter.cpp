@@ -690,7 +690,8 @@ void createContext() {
 	 glBindTexture(GL_TEXTURE_2D, waterTexture);
 	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);*/
-	 waterTexture2 = loadTextureRepeat("assets/seamless_water.jpg"); //water2.bmp");
+	 waterTexture2 = loadTextureRepeat("assets/seamless_water.jpg"); //water2.bmp"); 
+	 //https://www.imgonline.com.ua/eng/make-seamless-texture-result.php
 
 	bottomTexture = loadTextureRepeat("assets/water-river-with-stones.jpg"); //water.bmp
 	maskTexture = loadSOIL("assets/lake_mask.bmp"); 

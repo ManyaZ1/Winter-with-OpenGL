@@ -400,7 +400,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             // 1. Dynamic Crack Detection
             // Detect the WHITE edges as cracks
             // As meltFactor increases, we lower the threshold to capture more area as "cracks"
-            float crackThreshold = 0.7 - (meltFactor * 0.5); // Starts at 0.7, goes down to 0.2
+            float crackThreshold = 0.9 - (meltFactor * 0.5); // Starts at 0.7, goes down to 0.2
             float cracks = smoothstep(crackThreshold, crackThreshold + 0.1, voronoi);
             
             // 2. Define Ice and Crack Colors
