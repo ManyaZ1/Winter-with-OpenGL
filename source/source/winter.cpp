@@ -1598,16 +1598,16 @@ void mainLoop() {
 
 		// Check if camera is within 10 units of the wolf 
 		if (abs(camera->position.x - wolfX) < 8.0f &&
-			abs(camera->position.z - wolfZ) < 8.0f) {
+			abs(camera->position.z - wolfZ) < 8.0f && abs(camera->position.y - wolfY)<7.0f) {
 			audio.playPreloaded("wolf_howl", true);
 		}
 		else {
 			audio.stopPreloaded("wolf_howl");
 		}
 		// Check if camera is within 5 units of the bears
-		if ((abs(camera->position.x - bearX) < 7.0f &&	abs(camera->position.z - bearZ) < 7.0f) 
+		if ((abs(camera->position.x - bearX) < 7.0f &&	abs(camera->position.z - bearZ) < 7.0f && abs(camera->position.y-bearY)<7.0f) 
 			||
-			(abs(camera->position.x - polarbearX) < 7.0f &&	abs(camera->position.z - polarbearZ) < 7.0f)
+			(abs(camera->position.x - polarbearX) < 7.0f &&	abs(camera->position.z - polarbearZ) < 7.0f && abs(camera->position.y - polarbearY) < 7.0f)
 			){
 			audio.playPreloaded("bear_growl", true);
 		}
@@ -1710,8 +1710,9 @@ void mainLoop() {
 		snowSystem->update(deltaTime, camera->position);
 		if(wind.active)
 			snowSystem->update_velocity(wind.xBias, wind.zBias);
-		else
+		else {
 			snowSystem->update_velocity(0.0, 0.0);
+		}
 
 	// Track accumulation time and update fog
 	if (snowingEnabled) {

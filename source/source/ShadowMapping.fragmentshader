@@ -316,7 +316,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         vec3 terrainColor = mix(
         texture(terrainTex, vertex_UV_tiled).rgb,
         texture(terrainTex2, vertex_UV_tiled).rgb,        0.3);
-        
+        vec2 waterFlow = vec2(time * 0.004, time * 0.005); //shared water flow used for movement and distortion
 
         // Calculate if this fragment is at/below water level
         float surfaceHeight = vertex_position_worldspace.y;
@@ -331,15 +331,31 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         }
         vec3 waterColor;
         // Calculate freeze factor (0.0 = liquid, 1.0 = frozen)
-        float freezeFactor = smoothstep(0.3, 0.7, snowAmount);
+        float freezeFactor = snowAmount;
         
-        if(freezeFactor < 0.8) {
+        if(freezeFactor < 0.6) {  // || melt_factor>0.5
             // Liquid or partially frozen water - apply animation
             // Reduce animation speed as water freezes
-            //float animSpeed = 1.0 - freezeFactor;
-            vec2 waterUV1 = vertex_UV + vec2(time * 0.005 , time * 0.005 );
-            vec2 waterUV2 = vertex_UV + vec2(-time * 0.003 , time * 0.007 );
-            waterColor = mix(texture(waterTex, waterUV1).rgb, texture(waterTex2, waterUV2).rgb, 0.3);
+//            vec2 waterUV1 = vertex_UV + vec2(time * 0.005 , time * 0.005 );
+//            vec2 waterUV2 = vertex_UV + vec2(-time * 0.003 , time * 0.007 );
+//            waterColor = mix(texture(waterTex, waterUV1).rgb, texture(waterTex2, waterUV2).rgb, 0.3);
+            vec2 waterUV1 = vertex_UV + waterFlow +
+            vec2(
+                sin(time * 0.3 + vertex_UV.y * 4.0),
+                cos(time * 0.25 + vertex_UV.x * 3.0)
+            ) * 0.003;
+
+            vec2 waterUV2 = vertex_UV - waterFlow * 0.8 +
+            vec2(
+                cos(time * 0.35 + vertex_UV.x * 5.0),
+                sin(time * 0.28 + vertex_UV.y * 4.0)
+            ) * 0.002;
+
+        waterColor = mix(
+            texture(waterTex, waterUV1).rgb,
+            texture(waterTex2, waterUV2).rgb,
+            0.3
+        );
 
         }
         else {
@@ -355,19 +371,15 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         
         // Mix with frozen color
         waterColor = mix(desaturated, frozenColor, freezeFactor * 0.6);
+
         //float noise = texture(noiseTex, vertex_UV * 3.0).r;
         // 1. Create a "Milky" base using FBM or layered noise
         float baseNoise = texture(noiseTex, vertex_UV * 7.0).r;
-        //float fineDetail = texture( snowDetailTex, vertex_UV * 100.0).r;
-        float iceTexture = baseNoise;//mix(baseNoise, fineDetail, 0.3);
-
-        // 2. Simulate "Cracks" or "Bubbles" (Using a high-contrast noise)
-        //float bubbles = smoothstep(0.6, 0.7, fineDetail) * 0.3; 
+        float iceTexture = baseNoise;//mix(baseNoise, fineDetail, 0.3); 
 
         // 3. Apply to waterColor
         //  noise to add "whiteness" (frost) and "darkness" (depth)
         vec3 iceBase = mix(waterColor, vec3(0.9, 0.9, 1.0), iceTexture * 0.4);
-        //iceBase += bubbles; // Add white flecks for trapped air
 
         waterColor = mix(waterColor, iceBase, freezeFactor);
         vec3 bottomColor = texture(bottomTex, vertex_UV).rgb;
@@ -378,16 +390,14 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             // Calculate screen-space UV coordinates for reflection
             vec2 screenUV = gl_FragCoord.xy / vec2(textureSize(reflectionTex, 0));
             vec2 waveDistortion;
-            if(freezeFactor<0.99){
+            if(freezeFactor<0.5){
                 // Add wave distortion to reflection based on water animation
-                float wave1 = sin(time * 0.8 + vertex_UV.x * 15.0 + vertex_UV.y * 10.0);
-                float wave2 = cos(time * 0.5 - vertex_UV.x * 8.0 + vertex_UV.y * 12.0);
-                float wave3 = sin(time * 1.2 + vertex_UV.x * 20.0 - vertex_UV.y * 5.0);
-    
-                // Combine waves for more natural distortion
-                waveDistortion = vec2(
-                    (wave1 + wave2 * 0.5) * 0.01,
-                    (wave2 + wave3 * 0.5) * 0.001);
+                float wave1 = sin(time * 0.4 + (vertex_UV.x + waterFlow.x) * 8.0);
+                float wave2 = cos(time * 0.3 + (vertex_UV.y + waterFlow.y) * 6.0);
+
+                vec2 waveDistortion = vec2(
+                     wave1,
+                    wave2) * 0.0006;
             }
             else{ waveDistortion = vec2(0.0); // No distortion when frozen
             }
