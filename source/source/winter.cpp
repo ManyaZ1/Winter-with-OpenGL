@@ -151,6 +151,8 @@ bool snowMapGenerated = false;
 SnowSystem* snowSystem;
 bool snowingEnabled = false;
 float snowAccumulationTime = 0.0f;
+float meltTime = 0.0f;
+float meltLevel = 0.0f; // 0.0 = fully frozen, 1.0 = fully melted
 float fogAccumulationTime = 0.0f;
 float snowLevel = 0.0f;
 float fogDensity = 0.0f;
@@ -272,6 +274,8 @@ struct Uniforms {
 
 	GLuint waterHeight = 0;
 
+	GLuint meltFactor = 0;
+
 };
 
 Programs programs;
@@ -279,7 +283,7 @@ Uniforms u;
 TexLocations t;
 std::vector<float> heightData;
 
-GLuint loadTextureRepeat(const std::string& path) {
+GLuint loadTextureRepeat_nominmap(const std::string& path) {
 	//replace repeat lines, load repeat texture to shader with one line
 	GLuint tex = loadSOIL(path.c_str());
 	glBindTexture(GL_TEXTURE_2D, tex);
@@ -289,6 +293,25 @@ GLuint loadTextureRepeat(const std::string& path) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	return tex;
 }
+GLuint loadTextureRepeat(const std::string& path) {
+	GLuint tex = loadSOIL(path.c_str());
+	glBindTexture(GL_TEXTURE_2D, tex);
+	//can i make it clamp to edge? 
+
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	// CHANGE: Use GL_LINEAR_MIPMAP_LINEAR for smoother downscaling
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// CRITICAL: You must tell OpenGL to actually create the mipmap levels
+	glGenerateMipmap(GL_TEXTURE_2D);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, -0.5f);
+	return tex;
+}
+
 //replaces these blocks as well
 /*waterTexture = loadSOIL("assets/water.bmp");
 glBindTexture(GL_TEXTURE_2D, waterTexture);
@@ -493,6 +516,8 @@ void createContext() {
 	u.snowWind = glGetUniformLocation(programs.snow, "windStrength");
 	u.snowtime = glGetUniformLocation(programs.snow, "time");
 	
+	u.meltFactor = glGetUniformLocation(programs.lighting, "meltFactor");
+
 	// wind bias (direction)
 	u.xbias = glGetUniformLocation(programs.lighting, "x_bias");
 	u.zbias = glGetUniformLocation(programs.lighting, "z_bias");
@@ -626,9 +651,9 @@ void createContext() {
 	bushes->generate();
 
 	// 3 bush textures
-	bushTexture1 = loadTextureRepeat("assets/pixel_bush.png");
-	bushTexture2 = loadTextureRepeat("assets/bush2.png");
-	bushTexture3 = loadTextureRepeat("assets/bush3.png");
+	bushTexture1 = loadTextureRepeat_nominmap("assets/pixel_bush.png");
+	bushTexture2 = loadTextureRepeat_nominmap("assets/bush2.png");
+	bushTexture3 = loadTextureRepeat_nominmap("assets/bush3.png");
 
 	
 	// ================================================== CLOUDS  ================================================== //
@@ -665,14 +690,14 @@ void createContext() {
 	 glBindTexture(GL_TEXTURE_2D, waterTexture);
 	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);*/
-	 waterTexture2 = loadTextureRepeat("assets/water2.bmp");
+	 waterTexture2 = loadTextureRepeat("assets/seamless_water.jpg"); //water2.bmp");
 
 	bottomTexture = loadTextureRepeat("assets/water-river-with-stones.jpg"); //water.bmp
 	maskTexture = loadSOIL("assets/lake_mask.bmp"); 
 
 	sunTexture = loadSOIL("assets/fiery.bmp");
 
-	noiseTexture = loadTextureRepeat("assets/voronoi_noise.png");
+	noiseTexture = loadTextureRepeat("assets/Worley.jpg ");//voronoi_noise.png");
 
 
 	glBindTexture(GL_TEXTURE_2D, sunTexture);
@@ -854,8 +879,11 @@ void render_scene(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int 
 	glUniformMatrix4fv(u.skyVP, 1, GL_FALSE, &skyVP[0][0]);
 	glUniform1f(u.snowAmount, snowLevel);
 
-	// Reflection texture (only bind in NORMAL mode)
+	// melt Μελτ 
+	glUniform1f(u.meltFactor, meltLevel);
 
+	// Reflection texture (only bind in NORMAL mode)
+	
 	if (mode == RenderMode::NORMAL) {
 		glActiveTexture(GL_TEXTURE15);
 		glBindTexture(GL_TEXTURE_2D, reflectionTexture);
@@ -1025,372 +1053,6 @@ void reflection_pass(mat4 reflectionView, mat4 projectionMatrix) {
 
 void lighting_pass(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height, float currentFogDensity) {
 	render_scene(viewMatrix, projectionMatrix, screen_width, screen_height, currentFogDensity, RenderMode::NORMAL);
-}
-
-void lighting_pass_old(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int screen_height, float currentFogDensity) {
-	
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glViewport(0, 0, screen_width, screen_height);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	glUseProgram(programs.lighting);
-
-	// CRITICAL: Ensure instancing is OFF before doing anything else
-	glUniform1i(u.useInstancing, 0);
-
-	// Now proceed with Sky Dome...
-	glDisable(GL_CULL_FACE);
-	// Initial Setup
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glViewport(0, 0, screen_width, screen_height);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	glUseProgram(programs.lighting);
-	glUniformMatrix4fv(u.V, 1, GL_FALSE, &viewMatrix[0][0]);
-	glUniformMatrix4fv(u.P, 1, GL_FALSE, &projectionMatrix[0][0]);
-
-	// 1. SKY DOME (Unlit, no shadows)
-	//if (currentFogDensity <= 0.5f) { //draw only if low fog
-		//sphere->bind();
-		resetDefaultStates();
-		glDisable(GL_CULL_FACE);
-		glDepthFunc(GL_LEQUAL);
-		glDepthMask(GL_FALSE);
-
-		glUniform1i(u.useTexture, 3); // Sky mode
-		glUniform1f(u.normDir, -1.0f);
-
-		glActiveTexture(GL_TEXTURE7);
-		glBindTexture(GL_TEXTURE_2D, skyTexture);
-		glUniform1i(t.skyTex, 7);
-		glUniform1i(u.useInstancing, 0); //?
-		mat4 skyM = translate(mat4(1.0f), camera->position) * scale(mat4(1.0f), vec3(30.0f));
-		glUniformMatrix4fv(u.M, 1, GL_FALSE, &skyM[0][0]);
-		sphere->bind();
-		sphere->draw();
-
-		glEnable(GL_CULL_FACE);
-		glDepthFunc(GL_LESS);
-		glDepthMask(GL_TRUE);
-	//}
-	// 2. LIGHTING GLOBALS
-	glUniform1i(u.useInstancing, 0);
-	uploadLight(*light);
-	mat4 lightVP = light->lightVP();
-	glUniformMatrix4fv(u.lightVP, 1, GL_FALSE, &lightVP[0][0]);
-	glUniform3fv(u.lightDir, 1, &light->direction[0]);
-
-	// Bind Shadow Map once to a high slot
-	glActiveTexture(GL_TEXTURE8);
-	glBindTexture(GL_TEXTURE_2D, depthTexture);
-	glUniform1i(u.depthMap, 8);
-
-	// === NEW: Bind snow accumulation map ===
-	glActiveTexture(GL_TEXTURE9);
-	glBindTexture(GL_TEXTURE_2D, snowAccumTexture);
-	glUniform1i(u.snowAccumMap, 9);
-	// Calculate and upload sky view-projection matrix (constant)
-	mat4 skyVP = getSkyProjectionMatrix() * getSkyViewMatrix();
-	glUniformMatrix4fv(u.skyVP, 1, GL_FALSE, &skyVP[0][0]);
-
-	// Calculate snow amount based on accumulation time
-	//static float snowLevel = 0.0f;
-	snowLevel = max(min(snowAccumulationTime / 50.0f, 1.0f),0);  // 5/50=0.1
-	//if (snowingEnabled) {
-	//	snowLevel = min(snowAccumulationTime / 30.0f, 1.0f); // 30 seconds to full coverage
-	//}
-	glUniform1f(u.snowAmount, snowLevel);
-
-	// === lake reflection setup ===
-	glActiveTexture(GL_TEXTURE15);  // Use texture unit 15 (or any free slot)
-	glBindTexture(GL_TEXTURE_2D, reflectionTexture);
-	glUniform1i(u.reflectionTex, 15);
-	// Set reflection strength
-	glUniform1f(u.reflectionStrength, reflectionStrength);
-
-
-	// 3. TERRAIN
-	glUniform1i(u.useInstancing, 0);
-	resetDefaultStates();
-	glUniform1i(u.useTexture, 1); // Terrain mode
-
-	float repeats_on_surface = 600.0f;
-	float uvTile = repeats_on_surface / SCALING_FACTOR;
-	glUniform2f(u.uvScale, uvTile, uvTile);
-	glUniform1f(u.scalingFactor, SCALING_FACTOR);
-
-	// Bind all terrain textures
-	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, terrainTexture);
-	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, terrainTexture2);
-	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, waterTexture);
-	glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, waterTexture2);
-	glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, bottomTexture);
-	glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, maskTexture);
-
-		//snoww
-		// === ADD SNOW TEXTURE HERE ===
-		glActiveTexture(GL_TEXTURE10);
-		glBindTexture(GL_TEXTURE_2D, snowTexture);
-		glUniform1i(t.snowTex, 10);  // Bind to slot 10
-		// =============================
-		// === ADD SNOW DETAIL TEXTURE ===
-		glActiveTexture(GL_TEXTURE11);
-		glBindTexture(GL_TEXTURE_2D, snowDetailTexture);
-		glUniform1i(t.snowDetailTex, 11);  // Bind to slot 11
-		// ===============================
-		// === ADD NOISE TEXTURE ===
-		glActiveTexture(GL_TEXTURE12);
-		glBindTexture(GL_TEXTURE_2D, noiseTexture);
-		glUniform1i(t.noiseTex, 12);  // Bind to slot 12
-		// =========================
-
-	glUniform1i(t.terrainTex, 0);
-	glUniform1i(t.terrainTex2, 1);
-	glUniform1i(t.waterTex, 2);
-	glUniform1i(t.waterTex2, 3);
-	glUniform1i(t.bottomTex, 4);
-	glUniform1i(t.maskTex, 5);
-	glUniform1f(glGetUniformLocation(programs.lighting, "time"), glfwGetTime());
-
-	mat4 terrainM = translate(mat4(), vec3(0.0f, 0.0f, 0.0f)) * scale(mat4(), vec3(SCALING_FACTOR));
-	glUniformMatrix4fv(u.M, 1, GL_FALSE, &terrainM[0][0]);
-	terrain->bind();
-	terrain->draw();
-
-	// 4. FOREST (Instanced) - FIXED VERSION
-	resetDefaultStates();
-	glUniform1i(u.useInstancing, 1);
-	glUniform1i(u.useTexture, 5); // Tree mode
-	//glUniform1i(u.useTexture, 7);
-	glUniform2f(u.uvScale, 1.0f, 1.0f); // Reset UV scale for trees
-
-	//// CRITICAL FIX: Bind tree textures BEFORE drawing
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, trunkTexture);
-	glUniform1i(t.trunkTex, 0);
-
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, needleTexture);
-	glUniform1i(t.needleTex, 1);
-
-	// Bind additional needle textures if you have them
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, treeDiffuseTex2); // fir.jpg
-	glUniform1i(t.needleTex2, 2);
-
-	glActiveTexture(GL_TEXTURE3);
-	glBindTexture(GL_TEXTURE_2D, chrysTexture); // chrys.jpg  
-	glUniform1i(t.needleTex3, 3);
-
-	pineForest->draw();
-	
-	//glUniform1i(u.useTexture, 7); // Same mode as deer/bear
-	//glActiveTexture(GL_TEXTURE4);
-	//glBindTexture(GL_TEXTURE_2D, appleTexture);
-	//glUniform1i(u.diffuseSampler, 4);
-	
-	// CRITICAL: Unbind terrain textures first to avoid confusion
-	/*glActiveTexture(GL_TEXTURE5);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glActiveTexture(GL_TEXTURE6);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glActiveTexture(GL_TEXTURE7);
-	glBindTexture(GL_TEXTURE_2D, 0);*/
-	/*for (int i = 5; i < 9; i++) {
-		glActiveTexture(GL_TEXTURE0 + i);
-		glBindTexture(GL_TEXTURE_2D, 0);
-	}*/
-	// Now bind tree textures in a clean state
-	//glActiveTexture(GL_TEXTURE0);
-	//glBindTexture(GL_TEXTURE_2D, trunkTexture);
-	//glUniform1i(t.trunkTex, 0);
-
-	//glActiveTexture(GL_TEXTURE1);
-	//glBindTexture(GL_TEXTURE_2D, needleTexture);
-	//glUniform1i(t.needleTex, 1);
-
-	//glActiveTexture(GL_TEXTURE2);
-	//glBindTexture(GL_TEXTURE_2D, treeDiffuseTex2);
-	//glUniform1i(t.needleTex2, 2);
-
-	//glActiveTexture(GL_TEXTURE3);
-	//glBindTexture(GL_TEXTURE_2D, chrysTexture);
-	//glUniform1i(t.needleTex3, 3);
-
-	////pine tree forest
-	//glUniform1i(u.useTexture, 5);
-	//pineForest->draw();
-
-	resetDefaultStates();
-	glUniform1i(u.useInstancing, 1);
-	glUniform1i(u.useTexture, 7);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, appleTexture);
-	glUniform1i(u.diffuseSampler, 0);
-	appleForest->draw();
-	
-	//forest->draw();
-
-	// CRITICAL: Properly disable instancing after forest
-	glUniform1i(u.useInstancing, 0);
-	for (int i = 4; i <= 8; i++) {
-		glDisableVertexAttribArray(i);
-	}
-
-	// 5. SUN (Emissive)
-	resetDefaultStates();
-	glUniform1i(u.useTexture, 2); // Sun mode
-	glUniform1f(u.normDir, -1.0f);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, sunTexture);
-	glUniform1i(glGetUniformLocation(programs.lighting, "sunTex"), 0);
-
-	// Use the light's actual position (updated by light->update())
-	vec3 sunPos = light->sun_pos;
-	mat4 sunM = translate(mat4(1.0f), sunPos) * scale(mat4(1.0f), vec3(2.0f));
-	glUniformMatrix4fv(u.M, 1, GL_FALSE, &sunM[0][0]);
-	sphere->bind();
-	sphere->draw();
-
-	// 6. BUSH
-	resetDefaultStates();
-	glUniform1i(u.useTexture, 6); // Bush mode
-	glUniform1i(u.useInstancing, 1);
-	glUniform2f(u.uvScale, 1.0f, 1.0f);
-	//glActiveTexture(GL_TEXTURE0);
-	//glBindTexture(GL_TEXTURE_2D, bushTexture2);
-	//glUniform1i(u.diffuseSampler, 0);
-
-	//mat4 bushM = translate(mat4(1.0f), vec3(22.0f, 4.0f, 20.0f)) * scale(mat4(1.0f), vec3(0.03f, 0.02f, 0.03f)); //anisotropic scaling 
-	//glUniformMatrix4fv(u.M, 1, GL_FALSE, &bushM[0][0]);
-	//bushModel->bind();
-	//bushModel->draw();
-		// CRITICAL FIX: Bind tree textures BEFORE drawing
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, bushTexture1);
-	glUniform1i(t.bushTex1, 0);
-
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, bushTexture2);
-	glUniform1i(t.bushTex2, 1);
-
-	// Bind additional needle textures if you have them
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, bushTexture3); // fir.jpg
-	glUniform1i(t.bushTex3, 2);
-
-	bushes->draw();
-
-	for (int i = 4; i <= 7; i++)
-		glDisableVertexAttribArray(i);
-
-	// Only if textureIndex is instanced
-	glDisableVertexAttribArray(8);
-
-
-
-
-	//// 7. SUZANNE
-	//resetDefaultStates();
-	//glUniform1i(u.useTexture, 1);
-	//glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, modelDiffuseTexture);
-	//glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, modelSpecularTexture);
-	//glUniform1i(u.diffuseSampler, 0);
-	//glUniform1i(u.specularSampler, 1);
-
-	//mat4 suzanneM = translate(mat4(1.0f), vec3(-15.0f, 20.0f, -10.0f)) * scale(mat4(1.0f), vec3(1.5f));
-	//glUniformMatrix4fv(u.M, 1, GL_FALSE, &suzanneM[0][0]);
-	//model1->bind();
-	//model1->draw();
-
-
-	int gridRes = 1024;
-	float minX = -100.0f, maxX = 100.0f;
-	float minZ = -100.0f, maxZ = 100.0f;
-
-	//float waterHeight = sampleHeightAt(0.0f, 10.0f, heightData, gridRes, minX, maxX, minZ, maxZ);
-	//cout << "Water height at (0,0): " << waterHeight << endl;
-	//8. DEER 
-	//LOAD DEER OBJECT 
-	resetDefaultStates();
-	glUniform1i(u.useInstancing, 0);
-	glUniform1i(u.useTexture, 7); // Bush & Deer mode
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, deerTexture);
-	glUniform1i(u.diffuseSampler, 0);
-	deerX = 18.0f;
-	deerZ = 24.0f;
-	heightData = getHeightDataOnly("assets/heightmap/terrain_data.bin");
-	deerY= sampleHeightAt(deerX, deerZ, heightData, gridRes, minX, maxX, minZ, maxZ);
-	//
-	// cout << "Deer Y position: " << deerY << endl;
-	mat4 deerM = translate(mat4(1.0f), vec3(deerX,deerY,deerZ)) * scale(mat4(1.0f), vec3(1.0f));
-	glUniformMatrix4fv(u.M, 1, GL_FALSE, &deerM[0][0]);
-	deerModel->bind();
-	deerModel->draw();
-
-	//9. BEAR 
-	//LOAD BEAR OBJECT
-	resetDefaultStates();
-	glUniform1i(u.useTexture, 7); // Bush & Deer & Bear mode
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, bearTexture);
-	glUniform1i(u.diffuseSampler, 0);
-	bearX = -22.0f;
-	bearZ = -25.0f;
-	bearY = sampleHeightAt(bearX,bearZ, heightData, gridRes, minX, maxX, minZ, maxZ) ;
-	//cout << "Bear Y position: " << bearY << endl;
-	mat4 bearM = translate(mat4(1.0f), vec3(bearX, bearY, bearZ)) * scale(mat4(1.0f), vec3(2.0f));
-	glUniformMatrix4fv(u.M, 1, GL_FALSE, &bearM[0][0]);
-	bearModel->bind();
-	bearModel->draw();
-
-	//10.POLAR BEAR
-	resetDefaultStates();
-	glUniform1i(u.useTexture, 7); // Bush & Deer & Bear mode
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, polarbearTexture);
-	glUniform1i(u.diffuseSampler, 0);
-	polarbearX = -22.0f;
-	polarbearZ= 39.0f;
-	polarbearY = sampleHeightAt(polarbearX, polarbearZ, heightData, gridRes, minX, maxX, minZ, maxZ);
-	//cout << "Bear Y position: " << bearY << endl;
-	mat4 polarbearM = translate(mat4(1.0f), vec3(polarbearX, polarbearY, polarbearZ)) * scale(mat4(1.0f), vec3(2.0f));
-	glUniformMatrix4fv(u.M, 1, GL_FALSE, &polarbearM[0][0]);
-	bearModel->bind();
-	bearModel->draw();
-	
-	//11. WOLF
-	resetDefaultStates();
-	glUniform1i(u.useTexture, 7); // Bush & Deer & Bear & Wolf mode
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, wolfTexture);
-	glUniform1i(u.diffuseSampler, 0);
-	wolfX = 30.0f;
-	wolfZ = -15.0f;
-	wolfY = sampleHeightAt(wolfX, wolfZ, heightData, gridRes, minX, maxX, minZ, maxZ);
-	//cout << "Wolf Y position: " << wolfY << endl;
-	mat4 wolfM = translate(mat4(1.0f), vec3(wolfX, wolfY, wolfZ)) * scale(mat4(1.0f), vec3(0.35f));
-	glUniformMatrix4fv(u.M, 1, GL_FALSE, &wolfM[0][0]);
-	wolfModel->bind();
-	wolfModel->draw();
-	////10. APPLE TREE
-	////LOAD APPLE TREE OBJECT
-	//resetDefaultStates();
-	//glUniform1i(u.useTexture, 7); // Same mode as deer/bear
-	//glActiveTexture(GL_TEXTURE0);
-	//glBindTexture(GL_TEXTURE_2D, appleTexture);
-	//glUniform1i(u.diffuseSampler, 0);
-	//appleX = 30.0f;
-	//appleZ = 30.0f;
-	//appleY = sampleHeightAt(appleX, appleZ, heightData, gridRes, minX, maxX, minZ, maxZ);
-	////cout << "Apple Tree Y position: " << appleY << endl;
-	//mat4 appleM = translate(mat4(1.0f), vec3(appleX, appleY, appleZ)) * scale(mat4(1.0f), vec3(1.0f));
-	//glUniformMatrix4fv(u.M, 1, GL_FALSE, &appleM[0][0]);
-	//appleTreeModel->bind();
-	//appleTreeModel->draw();
 }
 
 void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
@@ -1576,7 +1238,7 @@ void mainLoop() {
 	int fb_width, fb_height;
 	glfwGetFramebufferSize(window, &fb_width, &fb_height);
 	snowAccumulationTime = -4.0f; //initially no snow lands, so start negative to delay
-	float fogStopedTime = 0.0f;
+	//meltTime = 0.0f;
 	//float fogDensity = 0.0f;
 	do {
 		// Static variables persist between frames
@@ -1666,6 +1328,43 @@ void mainLoop() {
 		glUniform1f(u.xbiassnow, wind.xBias);
 		glUniform1f(u.zbiassnow, wind.zBias);
 
+		// start melting when T pressed and snowing is off
+		if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS) {
+			//if (!snowingEnabled) {
+				meltTime += deltaTime; // Start melting timer
+				meltLevel = min(meltTime / 20.0f, 1.0f); // 20 seconds to fully melt
+				//snowLevel = max(0.0f, snowLevel - (deltaTime / 20.0f)); // Decrease snow level over time
+				cout << "Melt level: " << meltLevel << endl; // Debug
+				cout << "Snow level: " << snowLevel << endl; // Debug
+				snowAccumulationTime -= deltaTime*50/20; // Start melting snow
+			//}
+		}
+
+		// ADD THIS: Instantly max out snow when H pressed
+		static bool hKeyPressed = false;
+		if (glfwGetKey(window, GLFW_KEY_H) == GLFW_PRESS) {
+			if (!hKeyPressed) {
+				// Set snow to maximum
+				snowAccumulationTime = 50.0f;  // Max accumulation time
+				snowLevel = 1.0f;               // Max snow level
+
+				// Reset melting
+				meltTime = 0.0f;
+				meltLevel = 0.0f;
+
+				// Generate snow map if not already done
+				if (!snowMapGenerated) {
+					sky_visibility_pass();
+				}
+
+				cout << "Snow instantly set to MAXIMUM!" << endl;
+				hKeyPressed = true;
+			}
+		}
+		else {
+			hKeyPressed = false;
+		}
+
 		// Toggle snow system on G key press
 		// and add fog
 		if (glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS) {
@@ -1716,10 +1415,13 @@ void mainLoop() {
 
 	// Track accumulation time and update fog
 	if (snowingEnabled) {
-		snowAccumulationTime += deltaTime;	
+		if (snowAccumulationTime<50.0f){
+			snowAccumulationTime += deltaTime;	}
 		fogAccumulationTime += deltaTime;
-		
+		meltLevel = 0.0f; // Reset melt level when snowing starts
+		meltTime = 0.0f; // Reset melt timer
 	}
+	
 	snowLevel = glm::clamp(snowAccumulationTime / 50.0f, 0.0f, 1.0f);
 	reflectionStrength = glm::clamp(snowAccumulationTime / 50.0f, 0.2f, 0.5f);
 	if (!snowingEnabled) {

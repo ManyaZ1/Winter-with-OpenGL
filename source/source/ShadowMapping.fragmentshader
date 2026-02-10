@@ -18,6 +18,7 @@ uniform vec3 lightPosition_worldspace2;
 uniform int useTexture;
 uniform float waterHeight;
 
+
 //uniform float waterThreshold; 
  // 0: Simple Material (mtl struct) 
 // 1: Terrain/Lake Textures using mask
@@ -67,7 +68,8 @@ uniform sampler2D snowTex;
 uniform sampler2D snowAccumMap;
 uniform mat4 skyVP;
 uniform float snowAmount; // 0.0 to 1.0
-
+//MELTING LOGIC
+uniform float meltFactor; 
 //snow detail
 uniform sampler2D snowDetailTex;
 //noise
@@ -289,7 +291,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             _Kd.rgb = texture(trunkTex, barkUV).rgb;
         } else {
         // NEEDLES: Select texture based on instance index
-            vec2 branchUV = vec2((vertex_UV.x - 0.5) * 2.0, vertex_UV.y) * vec2(5.0, 5.0); //*repetition factor
+            vec2 branchUV = vec2((vertex_UV.x - 0.5) * 2.0, vertex_UV.y) * vec2(9.0, 9.0); //*repetition factor
         
             vec4 texColor;
             // Switch between different needle textures based on textureIndex
@@ -332,8 +334,10 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         vec3 waterColor;
         // Calculate freeze factor (0.0 = liquid, 1.0 = frozen)
         float freezeFactor = snowAmount;
-        
-        if(freezeFactor < 0.6) {  // || melt_factor>0.5
+
+        //======================== water movement ====================//
+
+        if(freezeFactor < 0.6 || meltFactor>0.8 ) {  // || melt_factor>0.5
             // Liquid or partially frozen water - apply animation
             // Reduce animation speed as water freezes
 //            vec2 waterUV1 = vertex_UV + vec2(time * 0.005 , time * 0.005 );
@@ -351,11 +355,10 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
                 sin(time * 0.28 + vertex_UV.y * 4.0)
             ) * 0.002;
 
-        waterColor = mix(
-            texture(waterTex, waterUV1).rgb,
-            texture(waterTex2, waterUV2).rgb,
-            0.3
-        );
+            waterColor = mix(
+                texture(waterTex, waterUV1).rgb,
+                texture(waterTex2, waterUV2* vec2(4.0,4.0)).rgb,
+            0.4);
 
         }
         else {
@@ -364,7 +367,9 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         }
          // Simulate freezing: desaturate and brighten the water color
         vec3 frozenColor = vec3(0.85, 0.90, 0.95); // Icy blue-white color
-        
+        if (meltFactor >0.99){
+            freezeFactor=0.0; // fully melted, no ice effects
+        }
         // Calculate luminance for desaturation
         float luminance = dot(waterColor, vec3(0.299, 0.587, 0.114));
         vec3 desaturated = mix(waterColor, vec3(luminance), freezeFactor * 0.7);
@@ -382,6 +387,38 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         vec3 iceBase = mix(waterColor, vec3(0.9, 0.9, 1.0), iceTexture * 0.4);
 
         waterColor = mix(waterColor, iceBase, freezeFactor);
+        
+        // --- if melting => ICE CRACKS ---
+        if(meltFactor > 0.01 && meltFactor<1 ) {
+            // Inside your water logic (useTexture == 1)
+            float voronoi = texture(noiseTex, vertex_UV * 6.0).r; 
+            
+            // Since voronoi has WHITE EDGES (high values) and DARK CENTERS (low values):
+            // - High voronoi values (0.8-1.0) = crack edges
+            // - Low voronoi values (0.0-0.2) = ice centers
+            
+            // 1. Dynamic Crack Detection
+            // Detect the WHITE edges as cracks
+            // As meltFactor increases, we lower the threshold to capture more area as "cracks"
+            float crackThreshold = 0.7 - (meltFactor * 0.5); // Starts at 0.7, goes down to 0.2
+            float cracks = smoothstep(crackThreshold, crackThreshold + 0.1, voronoi);
+            
+            // 2. Define Ice and Crack Colors
+            vec3 iceColor = vec3(0.85, 0.92, 0.95);   // Light bluish-white ice
+            vec3 crackColor = vec3(0.05, 0.15, 0.25); // Dark blue-gray water in cracks
+
+            // 3. Mix ice with cracks (cracks = 1.0 means show crack color)
+            vec3 crackedIce = mix(iceColor, crackColor, cracks);
+
+            // 4. The "Melting" Alpha
+            // Use the meltFactor to hide the chunks over time
+            // Use INVERTED voronoi: ice chunks (dark centers) disappear first
+            float iceVisibility = smoothstep(meltFactor - 0.1, meltFactor + 0.1, 1.0 - voronoi);
+
+            // Finally blend the ice floes with the liquid water beneath
+            waterColor = mix(waterColor, crackedIce, iceVisibility);
+
+        }   
         vec3 bottomColor = texture(bottomTex, vertex_UV).rgb;
         vec3 finalWater = mix(bottomColor, waterColor, 0.9);
         
@@ -463,7 +500,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     //        _Kd.rgb = mix(_Kd.rgb, snowflakeColor, strength);
     //    }
     //}
-    if (detailFade > 0.01 && snowAmount > 0.01 && lakeMask < 0.5 ) { //&& snowAmount < 0.6 
+    if (detailFade > 0.01 && snowAmount > 0.01 && lakeMask < 0.5 && meltFactor<0.4) { //&& snowAmount < 0.6 
         // 2. GRID-BASED SNOWFLAKES
         float gridScale = 2.0; 
         if (useTexture == 5 ||  useTexture == 6 || useTexture == 7 ){
