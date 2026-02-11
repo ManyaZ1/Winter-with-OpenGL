@@ -18,6 +18,11 @@ uniform int windStrength ;
 uniform float x_bias;
 uniform float z_bias;
 uniform float time;
+uniform mat4 skyVP;
+uniform sampler2D snowAccumMap;
+uniform float snowAmount; // 0.0 to 1.0
+uniform sampler2D maskTex;      // White = lake
+
 // ================================================
 
 
@@ -151,35 +156,43 @@ void main() {
     vertex_UV_tiled = vertexUV * uvScale;
 
     vec4 worldPos = M * vec4(vertexPosition_modelspace, 1.0);
+
+    // --- SNOW INFLATION LOGIC ONLY FOR TERRAIN---
+    float maskValue = texture(maskTex, vertex_UV).r;
+    if(snowAmount> 0.4 && useTexture==1 && maskValue<0.5){
+    // 1. Project vertex to sky-space to check visibility
+    vec4 fragPosSky = skyVP * worldPos;
+    vec3 skyCoords = (fragPosSky.xyz / fragPosSky.w) * 0.5 + 0.5;
+    float skyDepth = texture(snowAccumMap, skyCoords.xy).r;
+    float fragDepth = skyCoords.z;
+    
+    // Is this vertex hit by snow?
+    float skyVisible = (fragDepth - 0.01) < skyDepth ? 1.0 : 0.0;
+    
+    // 2. Normal check (consistent with fragment shader)
+    vec3 n = normalize(mat3(modelMatrix) * vertexNormal_modelspace);
+    float normalFactor = max(dot(n, vec3(0, 1, 0)), 0.0);
+    // If the surface is perfectly flat (like a floor), the dot product is 1.0.
+    //If the surface is a vertical wall, the dot product is 0.0.
+    normalFactor = smoothstep(0.3, 0.8, normalFactor);
+    
+    float weight = skyVisible * normalFactor * snowAmount;
+
+    // 3. Taubin-lite "Valley Filling"
+    // Valleys usually have smaller/divergent normals or lower Y. 
+    // For a simple vertex shader, we scale displacement by (1.0 - normalFactor) 
+    // so that flat areas (valleys) get MORE height than steep peaks.
+    float inflationAmount = weight * 0.5; // Adjust 0.5 for max snow thickness
+    
+    // Offset position ALONG the world up vector or normal
+    // Using vec3(0,1,0) mimics snow "stacking" upwards
+    worldPos.y += inflationAmount; 
+
+    // Update gl_Position with the new snow-height world position
+    gl_Position = P * V * worldPos;
+    }
+
     vertex_position_worldspace = worldPos.xyz; // Pass to fragment shader
     Normal_worldspace = normalize(mat3(M) * vertexNormal_modelspace);
 }
 
-
-    // ===== TREE SECTION =====
-//    else if(useTexture == 5){
-//        // PHYSICS LOGIC FOR 10m TREE
-//        float h = clamp(vertexPosition_modelspace.y / treeTotalHeight, 0.0, 1.0);
-//
-//        vec3 currentOffset;
-//        //  4-cylinder logic (0.25 segments)
-//        if (h < 0.25) {
-//            currentOffset = mix(nodePositions[0], nodePositions[1], h / 0.25);
-//        } else if (h < 0.50) {
-//            currentOffset = mix(nodePositions[1], nodePositions[2], (h - 0.25) / 0.25);
-//        } else if (h < 0.75) {
-//            currentOffset = mix(nodePositions[2], nodePositions[3], (h - 0.50) / 0.25);
-//        } else {
-//            // Top segment
-//            currentOffset = nodePositions[3]; // Or further interpolation if needed
-//        }
-//
-//        vec3 bentPosition = vertexPosition_modelspace + currentOffset;
-//        
-//        // USE modelMatrix instead of M
-//       gl_Position = P * V * modelMatrix * vec4(bentPosition, 1.0);
-//        vertex_position_cameraspace = V * modelMatrix * vec4(bentPosition, 1.0);
-//        vertex_normal_cameraspace = mat4(transpose(inverse(mat3(V * modelMatrix)))) * vec4(vertexNormal_modelspace, 0);
-//        vertex_UV = vertexUV * uvScale;
-//        vertex_position_lightspace = lightVP * modelMatrix * vec4(bentPosition, 1.0);
-//    }

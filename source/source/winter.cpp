@@ -33,6 +33,9 @@ AudioManager audio;
 
 #define SCALING_FACTOR 200//60 //lab.cpp kai camera.cpp
 
+#define SHADOW_WIDTH  16384 //8192// 4096//2048    8192
+#define SHADOW_HEIGHT  16384//8192//4096//2048  8192
+
 using namespace std;
 using namespace glm;
 
@@ -49,10 +52,7 @@ float sampleHeightAt(
 	float minZ, float maxZ);
 std::vector<float> getHeightDataOnly(const std::string& filePath);
 
-
-
-#define SHADOW_WIDTH  16384 //8192// 4096//2048    8192
-#define SHADOW_HEIGHT  16384//8192//4096//2048  8192
+vec3 deerScale = vec3(1.0f);
 
 // Global Variables
 GLFWwindow* window;
@@ -996,7 +996,7 @@ void render_scene(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int 
 	deerZ = 24.0f;
 	heightData = getHeightDataOnly("assets/heightmap/terrain_data.bin");
 	deerY = sampleHeightAt(deerX, deerZ, heightData, gridRes, minX, maxX, minZ, maxZ);
-	mat4 deerM = translate(mat4(1.0f), vec3(deerX, deerY, deerZ)) * scale(mat4(1.0f), vec3(1.0f));
+	mat4 deerM = translate(mat4(1.0f), vec3(deerX, deerY, deerZ)) * scale(mat4(1.0f), deerScale);
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &deerM[0][0]);
 	deerModel->bind();
 	deerModel->draw();
@@ -1289,7 +1289,13 @@ void mainLoop() {
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		//αν σταθερη φωτεινή πηγη δεν εχει νοημα να το κανω καθε frame
 		// κάθε δευτερόλεπτο
-
+		//if q pressed scale the deer
+		if(glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+			deerScale += 0.1f;
+		}
+		if(glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+			deerScale -= 0.1f;
+		}
 
 		// Add cloud on C key press
 		if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {

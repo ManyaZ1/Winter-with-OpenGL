@@ -523,7 +523,8 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             //vec3 skyCoords = (fragPosSky.xyz / fragPosSky.w) * 0.5 + 0.5;
             //float skyDepth = texture(snowAccumMap, skyCoords.xy).r;
             //float skyVisible = (skyCoords.z - 0.001) < skyDepth ? 1.0 : 0.0;
-            //float skyVisible=1; //flakes everywhere => NO EXPENSIVE MATH
+            //float skyVisible=1; 
+            //===================================== flakes everywhere => NO EXPENSIVE MATH  ======= !
       
             // We can allow flakes if the surface faces UP, even if skyVisible fails.
             // Appear if visible from sky OR if the surface is facing up (like branches)
