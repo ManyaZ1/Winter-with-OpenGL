@@ -315,6 +315,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     
 
     if (useTexture == 1) {
+        vec3 waterColor_og; 
         vec3 terrainColor = mix(
         texture(terrainTex, vertex_UV_tiled).rgb,
         texture(terrainTex2, vertex_UV_tiled).rgb,        0.3);
@@ -356,15 +357,16 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             ) * 0.002;
 
             waterColor = mix(
-                texture(waterTex, waterUV1).rgb,
-                texture(waterTex2, waterUV2* vec2(4.0,4.0)).rgb,
-            0.4);
-
+                texture(waterTex, waterUV1).rgb,                  //lab texture
+                texture(waterTex2, waterUV2* vec2(4.0,4.0)).rgb, //magical lake water
+            0.6);
+            
         }
         else {
             // Fully frozen - no animation
-            waterColor = texture(waterTex, vertex_UV).rgb;
+            waterColor = texture(waterTex, vertex_UV).rgb; // only waterTex (lab's texture that gives the ice a "rough" texture)
         }
+        waterColor_og=waterColor;
          // Simulate freezing: desaturate and brighten the water color
         vec3 frozenColor = vec3(0.85, 0.90, 0.95); // Icy blue-white color
         if (meltFactor >0.99){
@@ -393,14 +395,14 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             // Inside your water logic (useTexture == 1)
             float voronoi = texture(noiseTex, vertex_UV * 6.0).r; 
             
-            // Since voronoi has WHITE EDGES (high values) and DARK CENTERS (low values):
+            // voronoi has WHITE EDGES (high values) and DARK CENTERS (low values):
             // - High voronoi values (0.8-1.0) = crack edges
             // - Low voronoi values (0.0-0.2) = ice centers
             
             // 1. Dynamic Crack Detection
             // Detect the WHITE edges as cracks
             // As meltFactor increases, we lower the threshold to capture more area as "cracks"
-            float crackThreshold = 0.9 - (meltFactor * 0.5); // Starts at 0.7, goes down to 0.2
+            float crackThreshold = 0.9 - (meltFactor * 0.7); // Starts at 0.9, goes down to 0.2
             float cracks = smoothstep(crackThreshold, crackThreshold + 0.1, voronoi);
             
             // 2. Define Ice and Crack Colors

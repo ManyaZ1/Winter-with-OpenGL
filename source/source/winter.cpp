@@ -685,7 +685,7 @@ void createContext() {
 	terrainTexture = loadTextureRepeat("assets/aerial_rocks.bmp");
 	 terrainTexture2 = loadTextureRepeat("assets/grass2.bmp");
 	 
-	 waterTexture = loadTextureRepeat("assets/water.bmp");
+	 waterTexture = loadTextureRepeat("assets/seamless_water1.jpg");// water.bmp");
 	 /*waterTexture = loadSOIL("assets/water.bmp");
 	 glBindTexture(GL_TEXTURE_2D, waterTexture);
 	 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -698,7 +698,7 @@ void createContext() {
 
 	sunTexture = loadSOIL("assets/fiery.bmp");
 
-	noiseTexture = loadTextureRepeat("assets/Worley.jpg ");//voronoi_noise.png");
+	noiseTexture = loadTextureRepeat("assets/seamlessVoronoi.jpg");//voronoi_noise.png"); //Worley.jpg ");//
 
 
 	glBindTexture(GL_TEXTURE_2D, sunTexture);
