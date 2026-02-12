@@ -327,7 +327,8 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         //vec3 bottomColor = mix(texture(waterTex2, vertex_UV).rgb, texture(bottomTex, vertex_UV).rgb, 0.3);
         //lakeMask = smoothstep(0.0, 1.0, texture(maskTex, vertex_UV).r);
         float maskValue = texture(maskTex, vertex_UV).r;
-        lakeMask = (maskValue > 0.5 && surfaceHeight <= waterHeight) ? 1.0 : 0.0;
+        lakeMask = (maskValue > 0.5 && surfaceHeight <= waterHeight+0.15) ? 1.0 : 0.0;
+        //lakeMask = (maskValue > 0.5) ? 1.0 : 0.0;
         // NEW: During reflection pass, discard water pixels
         if (renderingReflection == 1 && lakeMask > 0.5) {
             discard;  // Don't render water in reflection
@@ -362,9 +363,12 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             0.6);
             
         }
-        else {
-            // Fully frozen - no animation
+        else if(freezeFactor > 0.85){
             waterColor = texture(waterTex, vertex_UV).rgb; // only waterTex (lab's texture that gives the ice a "rough" texture)
+        }
+        else {
+            // mixed textures but no animation
+            waterColor=mix(texture(waterTex, vertex_UV).rgb,texture(waterTex2, vertex_UV).rgb,0.6);
         }
         waterColor_og=waterColor;
          // Simulate freezing: desaturate and brighten the water color
@@ -406,8 +410,8 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             float cracks = smoothstep(crackThreshold, crackThreshold + 0.1, voronoi);
             
             // 2. Define Ice and Crack Colors
-            vec3 iceColor = vec3(0.85, 0.92, 0.95);   // Light bluish-white ice
-            vec3 crackColor = vec3(0.05, 0.15, 0.25); // Dark blue-gray water in cracks
+            vec3 iceColor = vec3(0.82, 0.90, 0.95);   // Light bluish-white ice
+            vec3 crackColor = vec3(0.05, 0.13, 0.23); // Dark blue-gray water in cracks
 
             // 3. Mix ice with cracks (cracks = 1.0 means show crack color)
             vec3 crackedIce = mix(iceColor, crackColor, cracks);
@@ -492,16 +496,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     
     float detailFade = smoothstep(50.0, 10.0, distToCamera);
 
-    // snowflakes
-    //if (snowAmount > 0.01 && lakeMask < 0.5) {
-    //    vec3 flakeGrid = floor(vertex_position_worldspace * 20.0);
-    //    float birthThreshold = hash(flakeGrid);
-    //    if (birthThreshold < snowAmount) {
-    //        vec3 snowflakeColor = vec3(0.98, 0.98, 1.0);
-    //        float strength = detailFade; 
-    //        _Kd.rgb = mix(_Kd.rgb, snowflakeColor, strength);
-    //    }
-    //}
+    // snowflakes +snow
     if (detailFade > 0.01 && snowAmount > 0.01 && lakeMask < 0.5 && meltFactor<0.4) { //&& snowAmount < 0.6 
         // 2. GRID-BASED SNOWFLAKES
         float gridScale = 2.0; 
@@ -546,7 +541,8 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             }
         }
      }
-     if (snowAmount > 0.05 && lakeMask<0.5) {  //SNOWLEVEL=SNOWAMOUT=0.1 => menas 5 accumulation time 
+    //
+    if (snowAmount > 0.05 && lakeMask<0.5) {  //SNOWLEVEL=SNOWAMOUT=0.1 => menas 5 accumulation time 
         // Transform fragment position to sky-space
         vec4 fragPosSky = skyVP * vec4(vertex_position_worldspace, 1.0);
         vec3 skyCoords = (fragPosSky.xyz / fragPosSky.w) * 0.5 + 0.5;
@@ -573,10 +569,39 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
 
         vec3 snowTextureColor = texture(snowTex, vertex_UV_tiled * 2.0).rgb;
         vec3 snowColor=snowTextureColor.rgb;
-        _Kd.rgb = mix(_Kd.rgb, snowColor, snowCoverage);
-        _Ka.rgb = mix(_Ka.rgb, snowColor * 0.6, snowCoverage);
-        _Ks.rgb = mix(_Ks.rgb, vec3(0.6), snowCoverage); // Snow is reflective
-        _Ns = mix(_Ns, 10.0, snowCoverage); // Increase shininess
+
+        // Use noise to create "patchy" melting
+        float noise = texture(noiseTex, vertex_UV_tiled * 4.0).r;
+                // 1. Κάνουμε το snowAmount πιο "επίμονο" με μια δύναμη (π.χ. 0.5 για να μένει περισσότερο)
+//float persistentSnow = pow(snowAmount, 0.7); 
+
+// 2. Χρησιμοποιούμε το persistentSnow για να ελέγξουμε το λιώσιμο
+// Μειώνουμε το 0.6 σε 0.4 για να μην ανεβαίνει τόσο ψηλά το "ταβάνι" του λιωσίματος
+//float meltThreshold = ((1.0 - persistentSnow) * 0.4) + (noise * 0.2);
+        // Το 0.7 περιορίζει το πόσο γρήγορα ανεβαίνει το threshold
+
+
+        //float meltThreshold = ((1.0 - snowAmount) * 0.6) + (noise * 0.2);
+
+        //float patchyCoverage = smoothstep(meltThreshold, meltThreshold + 0.05, snowCoverage);
+
+        //float meltThreshold = 1 - (meltFactor * 1); // Starts at 1, goes down to 0.0
+        float slowFactor = pow(meltFactor, 2.0);   // try 2.0, 3.0, 4.0
+float meltThreshold = 1.0 - slowFactor;
+
+        float meltedSnow = smoothstep(meltThreshold, meltThreshold + 0.1, noise);
+        //float patchyCoverage =snowCoverage-meltedSnow; 
+        float patchyCoverage = snowCoverage * (1.0 - meltedSnow);
+
+
+        _Kd.rgb = mix(_Kd.rgb, snowColor, patchyCoverage);
+        _Ka.rgb = mix(_Ka.rgb, snowColor * 0.6, patchyCoverage);
+        _Ks.rgb = mix(_Ks.rgb, vec3(0.6), patchyCoverage); // Snow is reflective
+        _Ns = mix(_Ns, 10.0, patchyCoverage);
+        //_Kd.rgb = mix(_Kd.rgb, snowColor, snowCoverage);
+//        _Ka.rgb = mix(_Ka.rgb, snowColor * 0.6, snowCoverage);
+//        _Ks.rgb = mix(_Ks.rgb, vec3(0.6), snowCoverage); // Snow is reflective
+//        _Ns = mix(_Ns, 10.0, snowCoverage); // Increase shininess
     }
 
 

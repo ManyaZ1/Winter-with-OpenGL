@@ -22,7 +22,7 @@ uniform mat4 skyVP;
 uniform sampler2D snowAccumMap;
 uniform float snowAmount; // 0.0 to 1.0
 uniform sampler2D maskTex;      // White = lake
-
+uniform float meltFactor; 
 // ================================================
 
 
@@ -102,12 +102,11 @@ void main() {
         modelMatrix = M;
         textureIndex = 0; // Default for non-instanced
     }
-
     vec3 lightDir_world = normalize(-lightDirection_worldspace);
     lightDir_cameraspace = normalize((V * vec4(lightDir_world, 0.0)).xyz);
 
-   // ===== SKY DOME SECTION =====
-   if (useTexture == 3) { //spherical mapping for sky dome
+    // ===== SKY DOME SECTION =====
+    if (useTexture == 3) { //spherical mapping for sky dome
         // position for rasterizer
         gl_Position = P * V * modelMatrix * vec4(vertexPosition_modelspace, 1.0);
 
@@ -145,7 +144,6 @@ void main() {
     //else {
         
     // Output position of the vertex
-    //gl_Position = P * V * modelMatrix * vec4(vertexPosition_modelspace, 1);
     gl_Position = P * V * modelMatrix * vec4(pos, 1.0);
     vertex_position_cameraspace = V * modelMatrix * vec4(vertexPosition_modelspace, 1);
     vertex_normal_cameraspace = mat4(transpose(inverse(mat3(V * modelMatrix)))) * vec4(vertexNormal_modelspace, 0);
@@ -159,37 +157,59 @@ void main() {
 
     // --- SNOW INFLATION LOGIC ONLY FOR TERRAIN---
     float maskValue = texture(maskTex, vertex_UV).r;
-    if(snowAmount> 0.4 && useTexture==1 && maskValue<0.5){
-    // 1. Project vertex to sky-space to check visibility
-    vec4 fragPosSky = skyVP * worldPos;
-    vec3 skyCoords = (fragPosSky.xyz / fragPosSky.w) * 0.5 + 0.5;
-    float skyDepth = texture(snowAccumMap, skyCoords.xy).r;
-    float fragDepth = skyCoords.z;
+    if(snowAmount> 0.01 || meltFactor >0.01){
+        // 1. Project vertex to sky-space to check visibility
+        vec4 fragPosSky = skyVP * worldPos;
+        vec3 skyCoords = (fragPosSky.xyz / fragPosSky.w) * 0.5 + 0.5;
+        float skyDepth = texture(snowAccumMap, skyCoords.xy).r;
+        float fragDepth = skyCoords.z;
     
-    // Is this vertex hit by snow?
-    float skyVisible = (fragDepth - 0.01) < skyDepth ? 1.0 : 0.0;
+        // Is this vertex hit by snow?
+        float skyVisible = (fragDepth - 0.01) < skyDepth ? 1.0 : 0.0;
     
-    // 2. Normal check (consistent with fragment shader)
-    vec3 n = normalize(mat3(modelMatrix) * vertexNormal_modelspace);
-    float normalFactor = max(dot(n, vec3(0, 1, 0)), 0.0);
-    // If the surface is perfectly flat (like a floor), the dot product is 1.0.
-    //If the surface is a vertical wall, the dot product is 0.0.
-    normalFactor = smoothstep(0.3, 0.8, normalFactor);
+         // 2. Normal check (consistent with fragment shader)
+        vec3 n = normalize(mat3(modelMatrix) * vertexNormal_modelspace);
+        float normalFactor = max(dot(n, vec3(0, 1, 0)), 0.0);
+        // If the surface is perfectly flat (like a floor), the dot product is 1.0.
+        //If the surface is a vertical wall, the dot product is 0.0.
+        normalFactor = smoothstep(0.3, 0.8, normalFactor);
     
-    float weight = skyVisible * normalFactor * snowAmount;
+        float weight = skyVisible * normalFactor * snowAmount;
 
-    // 3. Taubin-lite "Valley Filling"
-    // Valleys usually have smaller/divergent normals or lower Y. 
-    // For a simple vertex shader, we scale displacement by (1.0 - normalFactor) 
-    // so that flat areas (valleys) get MORE height than steep peaks.
-    float inflationAmount = weight * 0.5; // Adjust 0.5 for max snow thickness
-    
-    // Offset position ALONG the world up vector or normal
-    // Using vec3(0,1,0) mimics snow "stacking" upwards
-    worldPos.y += inflationAmount; 
+        //inflation of snow
+        if(snowAmount> 0.01 && useTexture==1 ){
+            if(maskValue<0.5){
+                // 3. inflate terrain non lake
+                // (1.0 - normalFactor) so that flat areas (valleys) get MORE height than steep peaks.
+                float inflationAmount = weight * 0.5; // Adjust 0.5 for max snow thickness
+                worldPos.y += inflationAmount; 
+            }
+            //rolling downhill
+            if(meltFactor>0.01 && maskValue<0.5){//not lake and it is melting
+                vec3 g = vec3(0.0, -1.0, 0.0);
 
-    // Update gl_Position with the new snow-height world position
-    gl_Position = P * V * worldPos;
+                // Project gravity onto surface plane
+                vec3 downhill = g - dot(g, n) * n;
+
+                // Normalize (avoid division by zero)
+                float len = length(downhill);
+                if (len > 0.0001)
+                    downhill /= len;
+                // Steepness factor (0 on flat, 1 on vertical)
+                float steepness = 1.0 - dot(n, vec3(0,1,0));
+
+                steepness = clamp(steepness, 0.0, 1.0);
+
+                float slideAmount = meltFactor * steepness * 0.4;
+                 worldPos.xyz += downhill * slideAmount;
+            }
+            //lake filling up
+            if(maskValue>0.5 && meltFactor>0.01 && meltFactor<1){
+                worldPos.y += 0.1;
+            }
+            // Update gl_Position with the new snow-height world position
+            gl_Position = P * V * worldPos;
+        }
     }
 
     vertex_position_worldspace = worldPos.xyz; // Pass to fragment shader

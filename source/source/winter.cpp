@@ -545,7 +545,7 @@ void createContext() {
 
 	// Loading a model
 	// The terrain object from Gaea is loaded as terrain
-	std::string modelPath = "assets/Mesher_LOD3_flat_lake.obj"; //"assets/Mesher_LOD3.obj";
+	std::string modelPath = "assets/Mesher_LOD2_flat_lake.obj"; //"assets/Mesher_LOD3.obj";
 	terrain = new Drawable(modelPath);
 
 	
@@ -694,11 +694,12 @@ void createContext() {
 	 //https://www.imgonline.com.ua/eng/make-seamless-texture-result.php
 
 	bottomTexture = loadTextureRepeat("assets/water-river-with-stones.jpg"); //water.bmp
-	maskTexture = loadSOIL("assets/lake_mask.bmp"); 
+	maskTexture = loadSOIL("assets/lake2.png"); 
 
 	sunTexture = loadSOIL("assets/fiery.bmp");
 
-	noiseTexture = loadTextureRepeat("assets/seamlessVoronoi.jpg");//voronoi_noise.png"); //Worley.jpg ");//
+	noiseTexture = loadTextureRepeat("assets/seamlessVoronoi_highcontrast.jpg");
+		//seamlessVoronoi.jpg");//voronoi_noise.png"); //Worley.jpg ");//
 
 
 	glBindTexture(GL_TEXTURE_2D, sunTexture);
@@ -1000,7 +1001,14 @@ void render_scene(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int 
 	glUniformMatrix4fv(u.M, 1, GL_FALSE, &deerM[0][0]);
 	deerModel->bind();
 	deerModel->draw();
-
+	//
+	float X = 0;
+	float Z = 100;
+	float Y = sampleHeightAt(X, Z, heightData, gridRes, minX, maxX, minZ, maxZ);
+	mat4 deerM2 = translate(mat4(1.0f), vec3(X, Y, Z)) * scale(mat4(1.0f), vec3(1.0f));
+	glUniformMatrix4fv(u.M, 1, GL_FALSE, &deerM2[0][0]);
+	deerModel->bind();
+	deerModel->draw();
 	// Bear
 	resetDefaultStates();
 	glUniform1i(u.useTexture, 7);
@@ -1115,11 +1123,7 @@ void depth_pass(mat4 viewMatrix, mat4 projectionMatrix, GLuint depthFBO) {
 	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &bearM[0][0]);
 	bearModel->bind();
 	bearModel->draw();
-	////apple tree
-	//mat4 appleM = translate(mat4(1.0f), vec3(appleX, appleY, appleZ)) * scale(mat4(1.0f), vec3(1.0f));
-	//glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &appleM[0][0]);
-	//appleTreeModel->bind();
-	//appleTreeModel->draw();
+	
 	//polar bear
 	mat4 polarbearM = translate(mat4(1.0f), vec3(polarbearX, polarbearY, polarbearZ)) * scale(mat4(1.0f), vec3(2.0f));
 	glUniformMatrix4fv(shadowModelLocation, 1, GL_FALSE, &polarbearM[0][0]);
@@ -1258,7 +1262,17 @@ void mainLoop() {
 		camera->update();
 		mat4 projectionMatrix = camera->projectionMatrix;
 		mat4 viewMatrix = camera->viewMatrix;
-
+		
+		if (abs(camera->position.x - deerX) < 3.0f &&
+			abs(camera->position.z - deerZ) < 3.0f && abs(camera->position.y - deerY) < 3.0f) {
+			deerScale += 0.1f; // increase scale when close
+		}
+		else if (abs(camera->position.x - deerX)  > 23.0f ||
+			abs(camera->position.z - deerZ) > 23.0f || abs(camera->position.y - deerY) > 23.0f) {
+			deerScale = vec3(1.0f); // decrease scale when far
+			
+		}
+		else{}
 		// Check if camera is within 10 units of the wolf 
 		if (abs(camera->position.x - wolfX) < 8.0f &&
 			abs(camera->position.z - wolfZ) < 8.0f && abs(camera->position.y - wolfY)<7.0f) {
@@ -1342,8 +1356,7 @@ void mainLoop() {
 				meltLevel = min(meltTime / 20.0f, 1.0f); // 20 seconds to fully melt
 				//snowLevel = max(0.0f, snowLevel - (deltaTime / 20.0f)); // Decrease snow level over time
 				cout << "Melt level: " << meltLevel << endl; // Debug
-				cout << "Snow level: " << snowLevel << endl; // Debug
-				snowAccumulationTime -= deltaTime*50/20; // Start melting snow
+				snowAccumulationTime -= deltaTime*50/30; // Start melting snow
 			//}
 		}
 
@@ -1430,6 +1443,7 @@ void mainLoop() {
 	}
 	
 	snowLevel = glm::clamp(snowAccumulationTime / 50.0f, 0.0f, 1.0f);
+	cout << "Snow level: " << snowLevel << endl; // Debug
 	reflectionStrength = glm::clamp(snowAccumulationTime / 50.0f, 0.2f, 0.5f);
 	if (!snowingEnabled) {
 		fogAccumulationTime -= deltaTime;
