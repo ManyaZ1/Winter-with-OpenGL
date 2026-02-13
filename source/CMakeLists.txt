@@ -124,6 +124,8 @@ add_executable(source
   common/snow.h
   common/snow.cpp
   common/AudioManager.h
+  common/AvalancheBall.h
+  common/AvalancheBall.cpp
 
   source/ShadowMapping.fragmentshader
   source/ShadowMapping.vertexshader

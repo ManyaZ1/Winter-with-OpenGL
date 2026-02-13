@@ -21,8 +21,12 @@
 #include "common/forest.h"
 #include "common/bush.h"
 #include "common/snow.h"
+#include "common/AvalancheBall.h"
+std::vector<AvalancheBall*> avalanches;
+bool avalancheTriggered = false;
+bool walkingMode = false;  // false = fly mode, true = walk mode
 #include <vector>
-
+#define LAKE_LEVEL 3.21598f
 #define AM_IMPLEMENTATION  // This "activates" the audio code here
 #include "../common/AudioManager.h"
 #define FULL_SCREEN 0
@@ -51,7 +55,9 @@ float sampleHeightAt(
 	float minX, float maxX,
 	float minZ, float maxZ);
 std::vector<float> getHeightDataOnly(const std::string& filePath);
-
+void constrainCameraToTerrain(Camera* camera, const std::vector<float>& heightData,
+	int gridRes, float minX, float maxX, float minZ, float maxZ,
+	float heightAboveTerrain );
 vec3 deerScale = vec3(1.0f);
 
 // Global Variables
@@ -156,7 +162,78 @@ float meltLevel = 0.0f; // 0.0 = fully frozen, 1.0 = fully melted
 float fogAccumulationTime = 0.0f;
 float snowLevel = 0.0f;
 float fogDensity = 0.0f;
+int gridRes = 1024;
+float minX = -100.0f, maxX = 100.0f;
+float minZ = -100.0f, maxZ = 100.0f;
 
+// footstep sound control
+// Add this struct near the top with other structs (after WindState)
+struct FootstepSystem {
+	vec3 lastPosition = vec3(0.0f);
+	float movementThreshold = 0.01f;  // Minimum movement to count as walking
+	//float stepTimer = 0.0f;
+	//float stepInterval = 0.45f;  // Time between footsteps (seconds)
+	bool isMoving = false;
+
+	enum SurfaceType {
+		GROUND,
+		SNOW,
+		WATER,
+		ICE
+	};
+
+	SurfaceType currentSurface = GROUND;
+	SurfaceType lastPlayedSurface = GROUND;
+
+	void update(float deltaTime, const vec3& cameraPos, float snowAmount,
+		const std::vector<float>& heightData, int gridRes,
+		float minX, float maxX, float minZ, float maxZ, float waterY) {
+		// Check if camera is moving
+		float distanceMoved = glm::length(cameraPos - lastPosition);
+		isMoving = distanceMoved > movementThreshold;
+
+		if (isMoving) {
+			//stepTimer += deltaTime;
+
+			// Determine surface type
+			float terrainHeight = sampleHeightAt(cameraPos.x, cameraPos.z, heightData,
+				gridRes, minX, maxX, minZ, maxZ);
+
+			// Check if on water (camera Y is close to water level)
+			//if (abs(cameraPos.y - LAKE_LEVEL - 1.8f) < 0.1f && terrainHeight <= LAKE_LEVEL) {
+			if (terrainHeight <= LAKE_LEVEL && snowAmount < 0.1f) {
+				currentSurface = WATER;
+			}
+			// Check if on snowy terrain
+			else if (snowAmount > 0.1f && terrainHeight > LAKE_LEVEL) {  // Equivalent to snowAccumulationTime > 5
+				currentSurface = SNOW;
+			}
+			else if(terrainHeight <= LAKE_LEVEL && snowAmount>0.5f) {
+				currentSurface = ICE; // Treat water with snow on top as ice
+			}
+			// Otherwise on ground
+			else {
+				currentSurface = GROUND;
+			}
+		}
+		else {
+			//stepTimer = 0.0f;  // Reset timer when not moving
+		}
+
+		lastPosition = cameraPos;
+	}
+
+	bool shouldPlayStep() {
+		if (isMoving){ //&& stepTimer >= stepInterval) {
+			//stepTimer = 0.0f;
+			return true;
+		}
+		return false;
+	}
+};
+
+// Add global variable with other globals (after WindState wind;)
+FootstepSystem footsteps;
 
 // Creating a structure to store the material parameters of an object
 struct Material
@@ -680,7 +757,7 @@ void createContext() {
 	createReflectionFBO(reflectionFBO, reflectionTexture, reflectionDepthRBO, W_WIDTH, W_HEIGHT);
 
 	/*==================================== load textures =======================================*/
-	snowTexture = loadTextureRepeat("assets/snow.bmp"); 
+	snowTexture = loadTextureRepeat("assets/seamless_Snow.jpg");//snow.bmp"); 
 	snowDetailTexture = loadTextureRepeat("assets/worley_snow.png");
 	terrainTexture = loadTextureRepeat("assets/aerial_rocks.bmp");
 	 terrainTexture2 = loadTextureRepeat("assets/grass2.bmp");
@@ -1051,6 +1128,25 @@ void render_scene(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int 
 	wolfModel->bind();
 	wolfModel->draw();
 
+	// --- 8. AVALANCHE BALLS ---
+	if (!avalanches.empty()) {
+		resetDefaultStates();
+		glUniform1i(u.useTexture, 8); // Avalanche mode (shader handles material + snow texture)
+
+		// Snow texture already bound from terrain rendering, but rebind to be safe
+		glActiveTexture(GL_TEXTURE10);
+		glBindTexture(GL_TEXTURE_2D, snowTexture);
+		glUniform1i(t.snowTex, 10);
+
+		for (auto* b : avalanches) {
+			if (b->isActive()) {
+				mat4 ballM = b->getModelMatrix();
+				glUniformMatrix4fv(u.M, 1, GL_FALSE, &ballM[0][0]);
+				sphere->bind();
+				sphere->draw();
+			}
+		}
+	}
 	// Restore culling
 	glCullFace(GL_BACK);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1262,17 +1358,85 @@ void mainLoop() {
 		camera->update();
 		mat4 projectionMatrix = camera->projectionMatrix;
 		mat4 viewMatrix = camera->viewMatrix;
-		
+		static bool fKeyPressed = false;
+		if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
+			if (!fKeyPressed) {
+				walkingMode = !walkingMode;
+				cout << "Camera mode: " << (walkingMode ? "WALK" : "FLY") << endl;
+				fKeyPressed = true;
+			}
+		}
+		else {
+			fKeyPressed = false;
+		}
+
+		// Apply terrain constraint only in walking mode
+		if (walkingMode) {
+			constrainCameraToTerrain(camera, heightData, gridRes, minX, maxX, minZ, maxZ, 1.8f);
+			// UPDATE FOOTSTEP SYSTEM
+			footsteps.update(deltaTime, camera->position, snowLevel,
+				heightData, gridRes, minX, maxX, minZ, maxZ, waterHeight);
+			bool groundFlag;
+			//// PLAY FOOTSTEP SOUNDS
+			if (footsteps.shouldPlayStep()) {
+				
+				// Play appropriate sound based on surface
+				switch (footsteps.currentSurface) {
+				case FootstepSystem::WATER:
+					//stop other footstep sounds to prevent overlap
+					audio.stopPreloaded("walk_ice");
+					audio.stopPreloaded("walk_ground");
+					audio.stopPreloaded("walk_snow");
+					audio.playPreloaded("walk_water", true);
+					break;
+				case FootstepSystem::SNOW:
+					//stop other footstep sounds to prevent overlap
+					audio.stopPreloaded("walk_ice");
+					audio.stopPreloaded("walk_ground");
+					audio.stopPreloaded("walk_water");
+					audio.playPreloaded("walk_snow", true);
+					break;
+				case FootstepSystem::GROUND:
+					//stop other footstep sounds to prevent overlap
+					audio.stopPreloaded("walk_ice");
+					audio.stopPreloaded("walk_snow");
+					audio.stopPreloaded("walk_water");
+					audio.playPreloaded("walk_ground", true);
+					break;
+				case FootstepSystem::ICE:
+					//stop other footstep sounds to prevent overlap
+					audio.stopPreloaded("walk_ground");
+					audio.stopPreloaded("walk_snow");
+					audio.stopPreloaded("walk_water");
+					audio.playPreloaded("walk_ice", true);
+					break;
+				}
+			}
+
+			// STOP SOUNDS WHEN NOT MOVING
+			if (!footsteps.isMoving) {
+				audio.stopPreloaded("walk_ground");
+				audio.stopPreloaded("walk_snow");
+				audio.stopPreloaded("walk_water");
+				audio.stopPreloaded("walk_ice");
+			}
+		}
+		else {
+			// In fly mode, ensure all footstep sounds are stopped
+			audio.stopPreloaded("walk_ground");
+			audio.stopPreloaded("walk_snow");
+			audio.stopPreloaded("walk_water");
+		}
 		if (abs(camera->position.x - deerX) < 3.0f &&
 			abs(camera->position.z - deerZ) < 3.0f && abs(camera->position.y - deerY) < 3.0f) {
 			deerScale += 0.1f; // increase scale when close
 		}
-		else if (abs(camera->position.x - deerX)  > 23.0f ||
-			abs(camera->position.z - deerZ) > 23.0f || abs(camera->position.y - deerY) > 23.0f) {
+		else if (abs(camera->position.x - deerX)  > 33.0f ||
+			abs(camera->position.z - deerZ) > 33.0f || abs(camera->position.y - deerY) > 33.0f) {
 			deerScale = vec3(1.0f); // decrease scale when far
 			
 		}
-		else{}
+		
 		// Check if camera is within 10 units of the wolf 
 		if (abs(camera->position.x - wolfX) < 8.0f &&
 			abs(camera->position.z - wolfZ) < 8.0f && abs(camera->position.y - wolfY)<7.0f) {
@@ -1305,10 +1469,15 @@ void mainLoop() {
 		// κάθε δευτερόλεπτο
 		//if q pressed scale the deer
 		if(glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
-			deerScale += 0.1f;
+			//deerScale += 0.1f;
+			audio.playPreloaded("teleport", false);
+			camera->position = vec3(0.0, 50, 0);
+
 		}
+
 		if(glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
 			deerScale -= 0.1f;
+			audio.playPreloaded("magic_Strike", false);
 		}
 
 		// Add cloud on C key press
@@ -1353,14 +1522,56 @@ void mainLoop() {
 		if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS) {
 			//if (!snowingEnabled) {
 				meltTime += deltaTime; // Start melting timer
-				meltLevel = min(meltTime / 20.0f, 1.0f); // 20 seconds to fully melt
+				meltLevel = min(meltTime / 40.0f, 1.0f); // 40 seconds to fully melt
 				//snowLevel = max(0.0f, snowLevel - (deltaTime / 20.0f)); // Decrease snow level over time
-				cout << "Melt level: " << meltLevel << endl; // Debug
-				snowAccumulationTime -= deltaTime*50/30; // Start melting snow
+				//cout << "Melt level: " << meltLevel << endl; // Debug
+				snowAccumulationTime -= deltaTime; // Start melting snow *50/50
+				if (meltTime < 15) {
+					audio.playPreloaded("ice_crack", false);
+				}
+				// SPAWN AVALANCHE ONCE
+				if (!avalancheTriggered && meltLevel > 0.1f) {
+					cout << "Spawning avalanche balls!" << endl;
+					for (int i = 0; i < 3; i++) {
+						AvalancheBall* b = new AvalancheBall(sphere, programs.lighting, heightData);
+						float xOffset = (rand() % 40) - 20.0f; // Variation: -20 to +20
+						float spawnZ = 90.0f; // Start high on mountain
+						float spawnY = sampleHeightAt(xOffset, spawnZ, heightData, gridRes, minX, maxX, minZ, maxZ);
+						b->spawn(vec3(xOffset, spawnY + 5.0f, spawnZ)); // Spawn above ground
+						avalanches.push_back(b);
+					}
+					avalancheTriggered = true;
+				}
+				if (avalancheTriggered && meltTime > 2 && !avalanches.empty()) {//wait 2 secs
+					audio.playPreloaded("avalanche",false);
+				}
 			//}
 		}
-
-		// ADD THIS: Instantly max out snow when H pressed
+		//if t not pressed dont play ice cracking and avalanche
+		if (!(glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS)) {
+			audio.stopPreloaded("ice_crack");
+			audio.stopPreloaded("avalanche");
+		}
+		// UPDATE AND DRAW AVALANCHES 
+		if (!avalanches.empty()) {
+			//glUseProgram(programs.lighting);
+			for (auto* b : avalanches) {
+				b->update(deltaTime);
+			}
+			// Remove inactive balls from memory
+			avalanches.erase(
+				std::remove_if(avalanches.begin(), avalanches.end(),
+					[](AvalancheBall* b) {
+						if (!b->isActive()) {
+							delete b;  // Free memory
+							return true;  // Mark for removal
+						}
+						return false;
+					}),
+				avalanches.end()
+			);
+		}
+		// Instantly max out snow when H pressed
 		static bool hKeyPressed = false;
 		if (glfwGetKey(window, GLFW_KEY_H) == GLFW_PRESS) {
 			if (!hKeyPressed) {
@@ -1443,7 +1654,7 @@ void mainLoop() {
 	}
 	
 	snowLevel = glm::clamp(snowAccumulationTime / 50.0f, 0.0f, 1.0f);
-	cout << "Snow level: " << snowLevel << endl; // Debug
+	//cout << "Snow level: " << snowLevel << endl; // Debug
 	reflectionStrength = glm::clamp(snowAccumulationTime / 50.0f, 0.2f, 0.5f);
 	if (!snowingEnabled) {
 		fogAccumulationTime -= deltaTime;
@@ -1617,6 +1828,19 @@ int main(void) {
 		audio.preload("wind", "sfx/wind.mp3");
 		audio.preload("wolf_howl", "sfx/wolf_howl.mp3");
 		audio.preload("bear_growl", "sfx/bear.mp3");
+
+		audio.preload("teleport", "sfx/teleport.mp3");
+		audio.preload("magic_Strike","sfx/magic_strike.mp3");
+
+		// Preload footstep sounds
+		audio.preload("walk_ground", "sfx/walk.mp3");
+		audio.preload("walk_snow", "sfx/walk_on_snow.mp3");
+		audio.preload("walk_water", "sfx/walk_on_water.mp3");
+		audio.preload("walk_ice", "sfx/walk_on_ice.mp3");
+
+		//
+		audio.preload("avalanche","sfx/avalanche.mp3");
+		audio.preload("ice_crack","sfx/ice-crackling.mp3");
 		createContext();
 		mainLoop();
 		free();
@@ -1690,4 +1914,21 @@ std::vector<float> getHeightDataOnly(const std::string& filePath) {
 		file.close();
 		return {};
 	}
+}
+void constrainCameraToTerrain(Camera* camera, const std::vector<float>& heightData,
+	int gridRes, float minX, float maxX, float minZ, float maxZ,
+	float heightAboveTerrain = 1.8f) {
+	// Get current camera position
+	float camX = camera->position.x;
+	float camZ = camera->position.z;
+
+	// Sample terrain height at camera's XZ position
+	float terrainHeight = sampleHeightAt(camX, camZ, heightData, gridRes,
+		minX, maxX, minZ, maxZ);
+
+	// Prevent going below water surface
+	float walkHeight = max(terrainHeight, waterHeight);
+
+	// Set camera Y to be heightAboveTerrain above the terrain/water
+	camera->position.y = walkHeight + heightAboveTerrain;
 }
