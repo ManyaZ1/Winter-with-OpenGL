@@ -29,7 +29,7 @@ bool walkingMode = false;  // false = fly mode, true = walk mode
 #define LAKE_LEVEL 3.21598f
 #define AM_IMPLEMENTATION  // This "activates" the audio code here
 #include "../common/AudioManager.h"
-#define FULL_SCREEN 0
+#define FULL_SCREEN 1
 #define W_WIDTH  1280
 #define W_HEIGHT  720
 #define TITLE "Winter"
@@ -208,7 +208,7 @@ struct FootstepSystem {
 			else if (snowAmount > 0.1f && terrainHeight > LAKE_LEVEL) {  // Equivalent to snowAccumulationTime > 5
 				currentSurface = SNOW;
 			}
-			else if(terrainHeight <= LAKE_LEVEL && snowAmount>0.5f) {
+			else if(terrainHeight <= LAKE_LEVEL && snowAmount>0.65f) {
 				currentSurface = ICE; // Treat water with snow on top as ice
 			}
 			// Otherwise on ground
@@ -622,7 +622,7 @@ void createContext() {
 
 	// Loading a model
 	// The terrain object from Gaea is loaded as terrain
-	std::string modelPath = "assets/Mesher_LOD2_flat_lake.obj"; //"assets/Mesher_LOD3.obj";
+	std::string modelPath = "assets/Mesher_LOD3_flat_lake.obj"; //"assets/Mesher_LOD3.obj";
 	terrain = new Drawable(modelPath);
 
 	
@@ -754,7 +754,9 @@ void createContext() {
 	createDepthFBOAndTexture(snowAccumFBO, snowAccumTexture);
 
 	// water
-	createReflectionFBO(reflectionFBO, reflectionTexture, reflectionDepthRBO, W_WIDTH, W_HEIGHT);
+	int actual_width, actual_height;
+	glfwGetFramebufferSize(window, &actual_width, &actual_height);
+	createReflectionFBO(reflectionFBO, reflectionTexture, reflectionDepthRBO, actual_width, actual_height);
 
 	/*==================================== load textures =======================================*/
 	snowTexture = loadTextureRepeat("assets/seamless_Snow.jpg");//snow.bmp"); 
@@ -846,7 +848,7 @@ void createContext() {
 	snowSystem = new SnowSystem();
 	
 	//snowFlakeTexture = loadSOIL("assets/circle.png"); //no longer used, left for future testing (snowflake shape)
-	snowSystem = new SnowSystem(10000);
+	snowSystem = new SnowSystem(8000);
 	snowSystem->initialize(programs.snow, snowFlakeTexture);
 
 	//everything orange fix
@@ -1152,7 +1154,9 @@ void render_scene(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 void reflection_pass(mat4 reflectionView, mat4 projectionMatrix) {
-	render_scene(reflectionView, projectionMatrix, W_WIDTH, W_HEIGHT, 0.0f, RenderMode::REFLECTION);
+	int fb_width, fb_height;
+	glfwGetFramebufferSize(window, &fb_width, &fb_height);
+	render_scene(reflectionView, projectionMatrix, fb_width, fb_height, 0.0f, RenderMode::REFLECTION);
 }
 
 
