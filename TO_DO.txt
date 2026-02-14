@@ -1,8 +1,0 @@
--> bushes like forest (anisotropic scaling)
--> reindeer
--> snow
--> fog
--> wind
--> lake reflection
--> lake freezing
--> mesh manipulation?
