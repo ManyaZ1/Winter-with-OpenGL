@@ -205,7 +205,7 @@ void main() {
             }
             //lake filling up
             if(maskValue>0.5 && meltFactor>0.01 && meltFactor<1){
-                worldPos.y += 0.1;
+                worldPos.y += 0.1*meltFactor;
             }
             // Update gl_Position with the new snow-height world position
             gl_Position = P * V * worldPos;

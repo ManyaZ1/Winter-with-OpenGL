@@ -14,7 +14,7 @@ struct Cloud {
     float size;
     float alpha;
     float speed;
-    float rotationAngle;
+	float rotationAngle; //unused for now but can be used to rotate UVs in shader for more variety
     int textureID; // 0 for first image, 1 for second
 };
 

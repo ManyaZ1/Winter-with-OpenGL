@@ -95,9 +95,9 @@ void CloudSystem::render(mat4 viewMatrix, mat4 projectionMatrix) {
 
     for (const auto& cloud : clouds) {
         mat4 billboard = mat4(1.0f);
-        billboard[0] = vec4(cameraRight * cloud.size, 0);
+        billboard[0] = vec4(cameraRight * cloud.size, 0); // camera right vector * size of cloud
         billboard[1] = vec4(cameraUp * cloud.size, 0);
-        billboard[2] = vec4(cameraForward * cloud.size, 0);
+        billboard[2] = vec4(cameraForward * cloud.size, 0); // Ζ (βάθος).
         billboard[3] = vec4(cloud.position, 1);
 
         // Bind the specific texture assigned to this cloud

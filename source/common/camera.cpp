@@ -136,71 +136,7 @@ void Camera::update() {
     // For the next frame, the "last time" will be "now"
     lastTime = currentTime;
 }
-// NEW METHOD: Get reflection view matrix for water reflections
-//mat4 Camera::getReflectionViewMatrix(float waterHeight) {
-//    // Calculate reflected camera position
-//    vec3 reflectedPosition = position;
-//    reflectedPosition.y = 2.0f * waterHeight - position.y;
-//
-//    // Calculate direction vector (where camera is looking)
-//    vec3 direction(
-//        cos(verticalAngle) * sin(horizontalAngle),
-//        sin(verticalAngle),
-//        cos(verticalAngle) * cos(horizontalAngle)
-//    );
-//
-//    // Reflect the vertical angle (invert the Y component of direction)
-//    vec3 reflectedDirection = direction;
-//    reflectedDirection.y = -reflectedDirection.y;
-//
-//    // Calculate right and up vectors for reflected camera
-//    vec3 right(
-//        sin(horizontalAngle - 3.14f / 2.0f),
-//        0,
-//        cos(horizontalAngle - 3.14f / 2.0f)
-//    );
-//
-//    // Up vector stays the same for reflection
-//    vec3 up = cross(right, reflectedDirection);
-//
-//    // Create reflection view matrix
-//    return lookAt(
-//        reflectedPosition,
-//        reflectedPosition + reflectedDirection,
-//        up
-//    );
-//}
-//mat4 Camera::getReflectionViewMatrix(float waterHeight) {
-//    // Calculate reflected camera position (flip Y across water plane)
-//    vec3 reflectedPosition = position;
-//    reflectedPosition.y = 2.0f * waterHeight - position.y;
-//
-//    // Calculate NORMAL direction vector (same as regular camera)
-//    vec3 direction(
-//        cos(verticalAngle) * sin(horizontalAngle),
-//        sin(verticalAngle),
-//        cos(verticalAngle) * cos(horizontalAngle)
-//    );
-//
-//    
-//    // Just use normal direction with reflected position
-//
-//    // Calculate right and up vectors (same as regular camera)
-//    vec3 right(
-//        sin(horizontalAngle - 3.14f / 2.0f),
-//        0,
-//        cos(horizontalAngle - 3.14f / 2.0f)
-//    );
-//
-//    vec3 up = cross(right, direction);
-//
-//    // Create view matrix with reflected position but NORMAL direction
-//    return lookAt(
-//        reflectedPosition,
-//        reflectedPosition + direction,  //Use normal direction, not flipped!
-//        up
-//    );
-//}
+
 // Helper function: Create reflection matrix for a plane
 mat4 getReflectionMatrix(vec3 planePoint, vec3 planeNormal) {
     planeNormal = normalize(planeNormal);

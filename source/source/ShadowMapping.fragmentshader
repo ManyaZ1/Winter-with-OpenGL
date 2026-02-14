@@ -396,7 +396,6 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         
         // --- if melting => ICE CRACKS ---
         if(meltFactor > 0.01 && meltFactor<1 ) {
-            // Inside your water logic (useTexture == 1)
             float voronoi = texture(noiseTex, vertex_UV * 6.0).r; 
             
             // voronoi has WHITE EDGES (high values) and DARK CENTERS (low values):
@@ -405,7 +404,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             
             // 1. Dynamic Crack Detection
             // Detect the WHITE edges as cracks
-            // As meltFactor increases, we lower the threshold to capture more area as "cracks"
+            // As meltFactor increases, lower the threshold to capture more area as "cracks"
             float crackThreshold = 0.9 - (meltFactor * 0.7); // Starts at 0.9, goes down to 0.2
             float cracks = smoothstep(crackThreshold, crackThreshold + 0.1, voronoi);
             
@@ -514,6 +513,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
     float detailFade = smoothstep(50.0, 10.0, distToCamera);
 
     // snowflakes +snow
+    // =========== SNOWFLAKES =========
     if (detailFade > 0.01 && snowAmount > 0.01 && lakeMask < 0.5 && meltFactor<0.4) { //&& snowAmount < 0.6 
         // 2. GRID-BASED SNOWFLAKES
         float gridScale = 2.0; 
@@ -558,7 +558,7 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
             }
         }
      }
-    //
+    // SNOW COVERAGE
     if (snowAmount > 0.05 && lakeMask<0.5) {  //SNOWLEVEL=SNOWAMOUT=0.1 => menas 5 accumulation time 
         // Transform fragment position to sky-space
         vec4 fragPosSky = skyVP * vec4(vertex_position_worldspace, 1.0);
@@ -581,35 +581,22 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         // Calculate final snow coverage
         float snowCoverage = skyVisible * normalFactor * snowAmount;
 
-        // Blend base color with snow
-        //vec3 snowColor = vec3(0.95, 0.96, 0.98); // Slightly blue-white
-
         vec3 snowTextureColor = texture(snowTex, vertex_UV_tiled * 2.0).rgb;
         vec3 snowColor=snowTextureColor.rgb;
-
-        // Use noise to create "patchy" melting
-        float noise = texture(noiseTex, vertex_UV_tiled * 4.0).r;
-                // 1. Κάνουμε το snowAmount πιο "επίμονο" με μια δύναμη (π.χ. 0.5 για να μένει περισσότερο)
-//float persistentSnow = pow(snowAmount, 0.7); 
-
-// 2. Χρησιμοποιούμε το persistentSnow για να ελέγξουμε το λιώσιμο
-// Μειώνουμε το 0.6 σε 0.4 για να μην ανεβαίνει τόσο ψηλά το "ταβάνι" του λιωσίματος
-//float meltThreshold = ((1.0 - persistentSnow) * 0.4) + (noise * 0.2);
-        // Το 0.7 περιορίζει το πόσο γρήγορα ανεβαίνει το threshold
-
-
-        //float meltThreshold = ((1.0 - snowAmount) * 0.6) + (noise * 0.2);
-
-        //float patchyCoverage = smoothstep(meltThreshold, meltThreshold + 0.05, snowCoverage);
-
-        //float meltThreshold = 1 - (meltFactor * 1); // Starts at 1, goes down to 0.0
-        float slowFactor = pow(meltFactor, 2.0);   // try 2.0, 3.0, 4.0
-        float meltThreshold = 1.0 - slowFactor;
-
-        float meltedSnow = smoothstep(meltThreshold, meltThreshold + 0.1, noise);
-        //float patchyCoverage =snowCoverage-meltedSnow; 
-        float patchyCoverage = snowCoverage * (1.0 - meltedSnow);
-
+        float patchyCoverage;
+        //  MELTING LOGIC
+        if(meltFactor>0.01){
+            // Use noise to create "patchy" melting
+            float noise = texture(noiseTex, vertex_UV_tiled * 4.0).r;
+            //float meltThreshold = 1 - (meltFactor * 1); // Starts at 1, goes down to 0.0
+            float slowFactor = pow(meltFactor, 2.0);   // try 2.0, 3.0, 4.0
+            float meltThreshold = 1.0 - slowFactor;
+            float meltedSnow = smoothstep(meltThreshold, meltThreshold + 0.1, noise);
+            //float patchyCoverage =snowCoverage-meltedSnow; 
+            patchyCoverage = snowCoverage * (1.0 - meltedSnow);}
+        else{
+            patchyCoverage = snowCoverage; //NOTHING MELTED
+        }
 
         _Kd.rgb = mix(_Kd.rgb, snowColor, patchyCoverage);
         _Ka.rgb = mix(_Ka.rgb, snowColor * 0.6, patchyCoverage);

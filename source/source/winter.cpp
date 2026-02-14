@@ -29,7 +29,7 @@ bool walkingMode = false;  // false = fly mode, true = walk mode
 #define LAKE_LEVEL 3.21598f
 #define AM_IMPLEMENTATION  // This "activates" the audio code here
 #include "../common/AudioManager.h"
-#define FULL_SCREEN 1
+#define FULL_SCREEN 0
 #define W_WIDTH  1280
 #define W_HEIGHT  720
 #define TITLE "Winter"
@@ -201,14 +201,14 @@ struct FootstepSystem {
 
 			// Check if on water (camera Y is close to water level)
 			//if (abs(cameraPos.y - LAKE_LEVEL - 1.8f) < 0.1f && terrainHeight <= LAKE_LEVEL) {
-			if (terrainHeight <= LAKE_LEVEL && snowAmount < 0.1f) {
+			if (terrainHeight <= LAKE_LEVEL && snowAmount < 0.5f) {
 				currentSurface = WATER;
 			}
 			// Check if on snowy terrain
-			else if (snowAmount > 0.1f && terrainHeight > LAKE_LEVEL) {  // Equivalent to snowAccumulationTime > 5
+			else if (snowAmount > 0.4f && terrainHeight > LAKE_LEVEL) {  // Equivalent to snowAccumulationTime > 5
 				currentSurface = SNOW;
 			}
-			else if(terrainHeight <= LAKE_LEVEL && snowAmount>0.65f) {
+			else if (terrainHeight <= LAKE_LEVEL) { //&& snowAmount > 0.5f already covered by water check
 				currentSurface = ICE; // Treat water with snow on top as ice
 			}
 			// Otherwise on ground
@@ -381,10 +381,12 @@ GLuint loadTextureRepeat(const std::string& path) {
 
 	// CHANGE: Use GL_LINEAR_MIPMAP_LINEAR for smoother downscaling
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	//•	GL_LINEAR_MIPMAP_LINEAR: linearly interpolates between the two closest mipmaps and samples the interpolated level via linear interpolation.
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	// CRITICAL: You must tell OpenGL to actually create the mipmap levels
 	glGenerateMipmap(GL_TEXTURE_2D);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, -0.5f);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, -0.5f);
 	return tex;
 }
@@ -622,7 +624,7 @@ void createContext() {
 
 	// Loading a model
 	// The terrain object from Gaea is loaded as terrain
-	std::string modelPath = "assets/Mesher_LOD3_flat_lake.obj"; //"assets/Mesher_LOD3.obj";
+	std::string modelPath = "assets/Mesher_LOD2_flat_lake_no_blur.obj";// Mesher_LOD3_flat_lake.obj"; //"assets / Mesher_LOD3.obj";
 	terrain = new Drawable(modelPath);
 
 	
@@ -773,7 +775,7 @@ void createContext() {
 	 //https://www.imgonline.com.ua/eng/make-seamless-texture-result.php
 
 	bottomTexture = loadTextureRepeat("assets/water-river-with-stones.jpg"); //water.bmp
-	maskTexture = loadSOIL("assets/lake2.png"); 
+	maskTexture = loadSOIL("assets/lake_mask.bmp");// lake2.png"); 
 
 	sunTexture = loadSOIL("assets/fiery.bmp");
 
@@ -849,7 +851,7 @@ void createContext() {
 	
 	//snowFlakeTexture = loadSOIL("assets/circle.png"); //no longer used, left for future testing (snowflake shape)
 	snowSystem = new SnowSystem(8000);
-	snowSystem->initialize(programs.snow, snowFlakeTexture);
+	snowSystem->initialize(programs.snow); //, snowFlakeTexture
 
 	//everything orange fix
 	//// CRITICAL: Disable instancing attributes for non-instanced rendering

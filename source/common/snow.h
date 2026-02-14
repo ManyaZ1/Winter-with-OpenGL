@@ -29,7 +29,7 @@ public:
     SnowSystem(int maxParticles = 5000);
     ~SnowSystem();
 
-    void initialize(GLuint program, GLuint texture);
+    void initialize(GLuint program); //, GLuint texture
     void update(float deltaTime, glm::vec3 cameraPos);
     void update_velocity(float x_offset, float z_offset);
     void render(glm::mat4 viewMatrix, glm::mat4 projectionMatrix);
