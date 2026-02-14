@@ -464,7 +464,6 @@ void createDepthFBOAndTexture(GLuint& fboID, GLuint& textureID) {
 
 	// 5. Check Status
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-		// NOTE: In a real app, you might just return an error code instead of terminating here.
 		throw std::runtime_error("Frame buffer not initialized correctly");
 	}
 
@@ -1324,7 +1323,7 @@ void updateWind(	GLFWwindow* window,	WindState& wind,	bool& vKeyPressed,	float b
 		wind.zBias -= biasStep;
 
 }
-
+bool avalanche_happened = false;
 void mainLoop() {
 	
 
@@ -1548,8 +1547,9 @@ void mainLoop() {
 					}
 					avalancheTriggered = true;
 				}
-				if (avalancheTriggered && meltTime > 2 && !avalanches.empty()) {//wait 2 secs
+				if (avalancheTriggered && meltTime > 2 && !avalanches.empty() && avalanche_happened == false) {//wait 2 secs
 					audio.playPreloaded("avalanche",false);
+					avalanche_happened = true;
 				}
 			//}
 		}
@@ -1745,8 +1745,6 @@ void initialize() {
 
 	//// 3. Create the window, passing the monitor handle and using its resolution
 	//// The W_WIDTH and W_HEIGHT are replaced by the monitor's resolution for clarity,
-	//// but you can still use your variables if you prefer.
-	//// The last two NULL arguments are for the monitor and share context respectively.
 	//window = glfwCreateWindow(mode->width, mode->height, TITLE, primary_monitor, NULL);
 	// Open a window and create its OpenGL context
 #if FULL_SCREEN == 1
