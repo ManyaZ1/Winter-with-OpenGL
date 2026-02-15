@@ -18,6 +18,7 @@ uniform vec3 lightPosition_worldspace2;
 uniform int useTexture;
 uniform float waterHeight;
 
+uniform vec2 screenSize;
 
 //uniform float waterThreshold; 
  // 0: Simple Material (mtl struct) 
@@ -430,22 +431,23 @@ vec3 calculatePhong(Light lightData, vec4 lightPosCamera, float visibility) {
         // NEW: Add reflection to water
         if (lakeMask > 0.5 ) {  // Only apply reflection to lake areas
             // Calculate screen-space UV coordinates for reflection
-            vec2 screenUV = gl_FragCoord.xy / vec2(textureSize(reflectionTex, 0));
+            vec2 screenUV = gl_FragCoord.xy / screenSize; // normalized [0,1]
+            
+            //vec2 screenUV = gl_FragCoord.xy / vec2(textureSize(reflectionTex, 0));
             vec2 waveDistortion;
             if(freezeFactor<0.5){
                 // Add wave distortion to reflection based on water animation
-                //float wave1 = sin(time * 0.4 + (vertex_UV.x + waterFlow.x) * 8.0);
-                //float wave2 = cos(time * 0.3 + (vertex_UV.y + waterFlow.y) * 6.0);
-                float wave1= vertex_UV.x*sin(time * 0.5)+ waterFlow.x;
-                float wave2= vertex_UV.y*cos(time * 0.3)+ waterFlow.y;
+                float wave1 = sin(time * 0.4 + (vertex_UV.x + waterFlow.x) * 8.0);
+                float wave2 = cos(time * 0.3 + (vertex_UV.y + waterFlow.y) * 6.0);
+
                 waveDistortion = vec2(
                      wave1,
-                    wave2) * 0.009;
+                    wave2) * 0.006;
             }
             else{ waveDistortion = vec2(0.0); // No distortion when frozen
             }
-            vec2 reflectionUV = screenUV + waveDistortion;
-            
+            //vec2 reflectionUV = screenUV + waveDistortion;
+            vec2 reflectionUV = clamp(screenUV + waveDistortion, 0.0, 1.0);
             // Sample reflection texture
             vec3 reflectionColor = texture(reflectionTex, reflectionUV).rgb;
             

@@ -29,12 +29,12 @@ bool walkingMode = false;  // false = fly mode, true = walk mode
 #define LAKE_LEVEL 3.21598f
 #define AM_IMPLEMENTATION  // This "activates" the audio code here
 #include "../common/AudioManager.h"
-#define FULL_SCREEN 0
+#define FULL_SCREEN 1
 #define W_WIDTH  1280
 #define W_HEIGHT  720
 #define TITLE "Winter"
 AudioManager audio;
-
+GLint screenSizeLoc;
 #define SCALING_FACTOR 200//60 //lab.cpp kai camera.cpp
 
 #define SHADOW_WIDTH  16384 //8192// 4096//2048    8192
@@ -58,7 +58,7 @@ std::vector<float> getHeightDataOnly(const std::string& filePath);
 void constrainCameraToTerrain(Camera* camera, const std::vector<float>& heightData,
 	int gridRes, float minX, float maxX, float minZ, float maxZ,
 	float heightAboveTerrain );
-vec3 deerScale = vec3(1.0f);
+vec3 deerScale = vec3(1.2f);
 
 // Global Variables
 GLFWwindow* window;
@@ -799,7 +799,7 @@ void createContext() {
 
 	//cache texture locations
 	glUseProgram(programs.lighting);
-
+	screenSizeLoc = glGetUniformLocation(programs.lighting, "screenSize");
 	//snow
 	t.snowTex = glGetUniformLocation(programs.lighting, "snowTex");
 	t.snowDetailTex = glGetUniformLocation(programs.lighting, "snowDetailTex");
@@ -967,6 +967,10 @@ void render_scene(mat4 viewMatrix, mat4 projectionMatrix, int screen_width, int 
 	// Reflection texture (only bind in NORMAL mode)
 	
 	if (mode == RenderMode::NORMAL) {
+		glUniform2f(screenSizeLoc, (float)screen_width, (float)screen_height);
+		glActiveTexture(GL_TEXTURE15);
+		glBindTexture(GL_TEXTURE_2D, reflectionTexture);
+		glUniform1i(u.reflectionTex, 15);
 		glActiveTexture(GL_TEXTURE15);
 		glBindTexture(GL_TEXTURE_2D, reflectionTexture);
 		glUniform1i(u.reflectionTex, 15);
@@ -1432,13 +1436,13 @@ void mainLoop() {
 			audio.stopPreloaded("walk_snow");
 			audio.stopPreloaded("walk_water");
 		}
-		if (abs(camera->position.x - deerX) < 3.0f &&
-			abs(camera->position.z - deerZ) < 3.0f && abs(camera->position.y - deerY) < 3.0f) {
+		if (abs(camera->position.x - deerX) < 4.0f &&
+			abs(camera->position.z - deerZ) < 4.0f && abs(camera->position.y - deerY) < 4.0f) {
 			deerScale += 0.1f; // increase scale when close
 		}
 		else if (abs(camera->position.x - deerX)  > 33.0f ||
 			abs(camera->position.z - deerZ) > 33.0f || abs(camera->position.y - deerY) > 33.0f) {
-			deerScale = vec3(1.0f); // decrease scale when far
+			deerScale = vec3(1.2f); // decrease scale when far
 			
 		}
 		

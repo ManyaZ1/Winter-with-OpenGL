@@ -67,7 +67,7 @@ void AvalancheBall::update(float deltaTime) {
         }
 
         if (inWater) {
-            velocity *= 0.95f; // Water resistance
+            velocity *= 0.9f; // Water resistance
             inLake = true;
         }
 
