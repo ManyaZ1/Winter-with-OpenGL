@@ -1377,7 +1377,7 @@ void mainLoop() {
 
 		// Apply terrain constraint only in walking mode
 		if (walkingMode) {
-			constrainCameraToTerrain(camera, heightData, gridRes, minX, maxX, minZ, maxZ, 1.8f);
+			constrainCameraToTerrain(camera, heightData, gridRes, minX, maxX, minZ, maxZ, 2.4f);
 			// UPDATE FOOTSTEP SYSTEM
 			footsteps.update(deltaTime, camera->position, snowLevel,
 				heightData, gridRes, minX, maxX, minZ, maxZ, waterHeight);
