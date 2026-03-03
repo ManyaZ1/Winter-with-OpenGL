@@ -19,7 +19,8 @@ public:
     float speed; // units / second
     float mouseSpeed;
     float fovSpeed;
-
+    glm::vec3 direction_f;
+	float deltaTime;
     Camera(GLFWwindow* window);
     void update();
 	//float getHeightAtXZ(float x, float z);

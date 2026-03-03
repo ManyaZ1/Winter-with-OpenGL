@@ -5,6 +5,7 @@
 
 #define SCALING_FACTOR 200 //lab.cpp kai camera.cpp
 using namespace glm;
+extern float sampleHeightAt(float x, float z, const std::vector<float>& heightData, int gridResolution, float minX, float maxX, float minZ, float maxZ);
 
 Camera::Camera(GLFWwindow* window) : window(window) {
     position = vec3(15, 7, -15);
@@ -76,13 +77,14 @@ void Camera::update() {
     verticalAngle += mouseSpeed * float(height / 2 - yPos);
 
     // Task 5.4: right and up vectors of the camera coordinate system
+    // Task 5.4: right and up vectors of the camera coordinate system
     // use spherical coordinates
     vec3 direction(
         cos(verticalAngle) * sin(horizontalAngle),
         sin(verticalAngle),
         cos(verticalAngle) * cos(horizontalAngle)
     );
-
+	Camera::direction_f = direction; //for slide
     // Right vector
     vec3 right(
         sin(horizontalAngle - 3.14f / 2.0f),

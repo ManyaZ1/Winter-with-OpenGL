@@ -29,7 +29,7 @@ bool walkingMode = false;  // false = fly mode, true = walk mode
 #define LAKE_LEVEL 3.21598f
 #define AM_IMPLEMENTATION  // This "activates" the audio code here
 #include "../common/AudioManager.h"
-#define FULL_SCREEN 1
+#define FULL_SCREEN 0
 #define W_WIDTH  1280
 #define W_HEIGHT  720
 #define TITLE "Winter"
@@ -44,6 +44,7 @@ using namespace std;
 using namespace glm;
 
 // Function prototypes
+void slide(Camera* camera, float deltaTime, vec3& velocity);
 void initialize();
 void createContext();
 void mainLoop();
@@ -1328,6 +1329,7 @@ void updateWind(	GLFWwindow* window,	WindState& wind,	bool& vKeyPressed,	float b
 
 }
 bool avalanche_happened = false;
+vec3 velocity(0.0f);
 void mainLoop() {
 	
 
@@ -1445,7 +1447,19 @@ void mainLoop() {
 			deerScale = vec3(1.2f); // decrease scale when far
 			
 		}
-		
+		if (glfwGetKey(window, GLFW_KEY_Z) == GLFW_PRESS) {
+			//slide mode;
+			slide(camera,deltaTime,velocity);
+			//audio.stopPreloaded("walk_ground");
+			//audio.stopPreloaded("walk_snow");
+			//audio.stopPreloaded("walk_water");
+			//downhill vector
+
+		}
+		else
+		{
+			velocity = vec3(0.0f);
+		}
 		// Check if camera is within 10 units of the wolf 
 		if (abs(camera->position.x - wolfX) < 8.0f &&
 			abs(camera->position.z - wolfZ) < 8.0f && abs(camera->position.y - wolfY)<7.0f) {
@@ -1940,3 +1954,40 @@ void constrainCameraToTerrain(Camera* camera, const std::vector<float>& heightDa
 	// Set camera Y to be heightAboveTerrain above the terrain/water
 	camera->position.y = walkHeight + heightAboveTerrain;
 }
+void slide(Camera* camera,float deltaTime, vec3& velocity){// Initialize velocity vector) {
+	const float GRAVITY = 18.0f;
+	//vec3 next_pos = vec3(camX, camY, camZ) + camera->direction_f; // Slide downwards
+	//float terrainHeight = sampleHeightAt(next_pos.x, next_pos.z, heightData, gridRes,
+	//	minX, maxX, minZ, maxZ);
+	//next_pos.y = terrainHeight + 2.4f; // Keep the camera just above the terrain
+	
+	//(next_pos.y - camY) / ((next_pos.x - camX)+0.001) + (next_pos.y - camY) / (next_pos.z - camZ);
+	float d = 0.5f; // Distance to sample around the camera for slope calculation
+	float hL = sampleHeightAt(camera->position.x - d, camera->position.z, heightData, gridRes, minX, maxX, minZ, maxZ);
+	float hR = sampleHeightAt(camera->position.x + d, camera->position.z, heightData, gridRes, minX, maxX, minZ, maxZ);
+	float hBack = sampleHeightAt(camera->position.x, camera->position.z - d, heightData, gridRes, minX, maxX, minZ, maxZ);
+	float hFront = sampleHeightAt(camera->position.x, camera->position.z + d, heightData, gridRes, minX, maxX, minZ, maxZ);
+
+	// Vector pointing from high ground to low ground
+	glm::vec3 slopeDir(hL - hR, 0.0f, hBack - hFront);
+	// 2. Physics logic
+	if (glm::length(slopeDir) > 0.01f) {
+		velocity += glm::normalize(slopeDir) * GRAVITY * deltaTime;
+
+	}
+	velocity *= 0.85f; //  drag
+	camera->position += velocity * deltaTime;
+	camera->position.y = sampleHeightAt(camera->position.x, camera->position.z, heightData, gridRes, minX, maxX, minZ, maxZ) + 2.4f; // Keep above terrain
+
+}
+//vec3 n = normalize(mat3(modelMatrix) * vertexNormal_modelspace);
+	//vec3 downhill = g - dot(g, n) * n;
+	//if ((terrainHeight+2.4f) < camY) {
+	//	//camera->position = next_pos; // Move camera down
+	//	camera->speed += 0.1f; // Accelerate while sliding
+	//}
+	//else {
+	//	camera->speed -= 0.5f;
+	//	camera->direction_f *= -1.0f; // Bounce back in the opposite direction
+	//}
+	//camera->position += camera->direction_f * camera->deltaTime * camera->speed;

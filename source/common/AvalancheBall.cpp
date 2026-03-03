@@ -52,7 +52,7 @@ void AvalancheBall::update(float deltaTime) {
     float ground = sampleHeightAt(position.x, position.z, heightMap, res, -b, b, -b, b);
     float speed = glm::length(velocity);
     bool inWater = (ground <= (LAKE_LEVEL + 0.5f));
-    bool isStuck = (speed < 0.2f); // Threshold for being "stuck" on land
+    bool isStuck = (speed < 1.0f); // Threshold for being "stuck" on land
 
     // Only grow if moving and not in water/melting
     if (!inWater && !isStuck && meltTimer == 0.0f && radius < MAX_RADIUS) {
@@ -99,73 +99,7 @@ void AvalancheBall::update(float deltaTime) {
         position.y = ground + (radius * 0.8f);
     }
 }
-//void AvalancheBall::update(float deltaTime) {
-//    if (!active) return;
-//
-//    // 1. Calculate Slope (Downhill direction)
-//    float d = 0.5f;
-//    int res = 1024; float b = 100.0f; // Grid settings from winter.cpp
-//
-//    float hL = sampleHeightAt(position.x - d, position.z, heightMap, res, -b, b, -b, b);
-//    float hR = sampleHeightAt(position.x + d, position.z, heightMap, res, -b, b, -b, b);
-//    float hBack = sampleHeightAt(position.x, position.z - d, heightMap, res, -b, b, -b, b);
-//    float hFront = sampleHeightAt(position.x, position.z + d, heightMap, res, -b, b, -b, b);
-//
-//    // Vector pointing from high ground to low ground
-//    glm::vec3 slopeDir(hL - hR, 0.0f, hBack - hFront);
-//
-//    // 2. Physics logic
-//    if (glm::length(slopeDir) > 0.01f) {
-//        velocity += glm::normalize(slopeDir) * GRAVITY * deltaTime;
-//    }
-//
-//    position += velocity * deltaTime;
-//    velocity *= 0.99f; // Slight drag
-//
-//    // 3. Growth
-//    if (!inLake && radius < MAX_RADIUS) {
-//        radius += glm::length(velocity) * deltaTime * 0.1f;
-//    }
-//
-//    // 4. Terrain Clamping
-//    float ground = sampleHeightAt(position.x, position.z, heightMap, res, -b, b, -b, b);
-//    position.y = ground + (radius * 0.8f); // Sits slightly in the snow
-//    // 5. Lake Check & Melting Logic
-//    if (ground <= (LAKE_LEVEL + 0.5f)) { // Added a small epsilon
-//        if (!inLake) {
-//            inLake = true;
-//            startRadius = radius; // Capture the radius the moment it hits water
-//        }
-//
-//        velocity *= 0.95f; // Stronger water resistance
-//
-//        // Increment melt timer regardless of speed, 
-//        // but maybe speed it up as it slows down
-//        meltTimer += deltaTime;
-//
-//        float meltFactor = glm::clamp(meltTimer / MELT_DURATION, 0.0f, 1.0f);
-//
-//        // Shrink using the instance-specific startRadius
-//        radius = startRadius * (1.0f - meltFactor);
-//
-//        // Sink the ball: as it melts, it should drop lower into the water
-//        position.y = ground + (radius * 0.5f) - (meltFactor * 0.5f);
-//
-//        if (meltFactor >= 1.0f || radius < 0.05f) {
-//            active = false;
-//            return;
-//        }
-//    }
-//    else {
-//        inLake = false;
-//        meltTimer = 0.0f; // Reset if it somehow rolls out of the lake
-//        position.y = ground + (radius * 0.8f);
-//    }
-//
-//}
-//glm::mat4 AvalancheBall::getModelMatrix() const {
-//    return glm::translate(glm::mat4(1.0f), position) * glm::scale(glm::mat4(1.0f), glm::vec3(radius));
-//}
+
 glm::mat4 AvalancheBall::getModelMatrix() const {
     float visualRadius = radius;
 
